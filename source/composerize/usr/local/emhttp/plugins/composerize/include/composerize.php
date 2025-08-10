@@ -1,4 +1,10 @@
 <?php
+// --- DEBUGGING: Temporarily enable error reporting to diagnose the blank page issue ---
+ini_set('display_errors', '1');
+ini_set('display_startup_errors', '1');
+error_reporting(E_ALL);
+// --- END DEBUGGING ---
+
 /**
  * composerize.php - Helper functions for the Composerize Unraid Plugin.
  *
