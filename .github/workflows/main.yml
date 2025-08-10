@@ -30,20 +30,25 @@ jobs:
       - name: Make build script executable
         run: chmod +x build.sh
 
-      # Step 4: Run the build script
+      # Step 4: List files for debugging
+      # This helps confirm that the plugin file exists before the build script is run.
+      - name: List files in workspace
+        run: ls -lR
+
+      # Step 5: Run the build script
       # This executes the script from the Canvas.
       # It will create the .txz archive and update the .plg file.
       - name: Run build script
         id: build
-        run: ./build.sh composerize.plg
+        run: ./build.sh plugin/composerize.plg
 
-      # Step 5: Commit the updated .plg file back to the repository
+      # Step 6: Commit the updated .plg file back to the repository
       # This is important so the plugin URL in Unraid has the correct version and MD5 hash.
       - name: Commit updated plugin file
         run: |
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-          git add composerize.plg
+          git add plugin/composerize.plg
           # Check if there are any changes to commit
           if ! git diff-index --quiet HEAD; then
             git commit -m "ci: Build and update plugin file [skip ci]"
@@ -52,7 +57,7 @@ jobs:
             echo "No changes to commit."
           fi
 
-      # Step 6: Create a GitHub Release and upload the build artifacts
+      # Step 7: Create a GitHub Release and upload the build artifacts
       # This uses a popular action to create a release and attach the files.
       - name: Create Release and Upload Assets
         uses: softprops/action-gh-release@v2
@@ -63,4 +68,4 @@ jobs:
           # It looks for the .txz file in the 'archive' directory and the updated .plg file.
           files: |
             ./archive/*.txz
-            ./composerize.plg
+            ./plugin/composerize.plg
