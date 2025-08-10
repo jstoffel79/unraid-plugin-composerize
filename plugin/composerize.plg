@@ -2,25 +2,25 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name         "composerize">
 <!ENTITY author       "jstoffel79">
-<!ENTITY md5         "90ffa39244590ccc863d47ab2812c103">
-<!ENTITY version      "2025.08.10">
+<!ENTITY version      "2025.08.10"> <!-- This will be updated by the build script -->
+<!ENTITY md5          "placeholder">  <!-- This will be updated by the build script -->
 <!ENTITY launch       "Settings/Composerize">
 <!ENTITY branch       "main">
 <!ENTITY github       "jstoffel79/unraid-plugin-composerize">
 <!ENTITY repo         "https://github.com/&github;">
-<!ENTITY releaseURL   "https://raw.githubusercontent.com/&github;/&branch;">
-<!ENTITY pluginURL    "&releaseURL;/plugin/&name;.plg">
+<!ENTITY pluginURL    "https://raw.githubusercontent.com/&github;/&branch;/plugin/&name;.plg">
 <!ENTITY file         "&name;-&version;.txz">
-<!ENTITY archiveURL   "&releaseURL;/archive/&file;">
+<!-- This URL now correctly points to the GitHub Release assets -->
+<!ENTITY archiveURL   "https://github.com/&github;/releases/download/v&version;/&file;">
 ]>
 
 <PLUGIN name="&name;" author="&author;" version="&version;" launch="&launch;" pluginURL="&pluginURL;" support="&repo;">
 
 <CHANGES>
 ### 2025.08.10
+- Fixed download URL to point to GitHub Release assets.
 - Modernized plugin file for Unraid 7+ compatibility.
 - Updated versioning and improved installation/removal scripts.
-- Removed hardcoded MD5 check to simplify the build process.
 - Pointed plugin to jstoffel79 repository.
 
 ### 2023.11.01
@@ -42,12 +42,7 @@ rm -f $(ls /boot/config/plugins/&name;/&name;*.txz 2>/dev/null | grep -v '&versi
 <!-- This is the main plugin package file -->
 <FILE Name="/boot/config/plugins/&name;/&file;" Run="upgradepkg --install-new">
   <URL>&archiveURL;</URL>
-  <!--
-  MD5 checksum is removed.
-  The Apps plugin in Unraid typically handles checksums via the appfeed.
-  If you are building this package manually, you will need to generate a new MD5
-  for your .txz file and add the <MD5>tag back.
-  -->
+  <MD5>&md5;</MD5>
 </FILE>
 
 <!-- Post-installation message -->
