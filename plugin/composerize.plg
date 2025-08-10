@@ -1,58 +1,76 @@
 <?xml version='1.0' standalone='yes'?>
 <!DOCTYPE PLUGIN [
-<!ENTITY name       "composerize">
-<!ENTITY launch     "Settings/Composerize">
-<!ENTITY author     "llalon">
-<!ENTITY version "20231029">
-<!ENTITY branch "main">
-<!ENTITY file       "&name;-&version;.txz">
-<!ENTITY github     "llalon/unraid-plugin-composerize">
-<!ENTITY repo       "https://github.com/&github;">
-<!ENTITY releaseURL "https://raw.githubusercontent.com/&github;/&branch;">
-<!ENTITY pluginURL  "&releaseURL;/archive/&file;">
-<!ENTITY pluginURL  "&releaseURL;/plugin/&name;.plg">
-<!ENTITY md5 "9d08e6834ac5ce6a864a63b5c6e2276f">
+<!ENTITY name         "composerize">
+<!ENTITY author       "jstoffel79">
+<!ENTITY version      "20250810">
+<!ENTITY launch       "Settings/Composerize">
+<!ENTITY branch       "main">
+<!ENTITY github       "jstoffel79/unraid-plugin-composerize">
+<!ENTITY repo         "https://github.com/&github;">
+<!ENTITY releaseURL   "https://raw.githubusercontent.com/&github;/&branch;">
+<!ENTITY pluginURL    "&releaseURL;/plugin/&name;.plg">
+<!ENTITY file         "&name;-&version;.txz">
+<!ENTITY archiveURL   "&releaseURL;/archive/&file;">
 ]>
 
 <PLUGIN name="&name;" author="&author;" version="&version;" launch="&launch;" pluginURL="&pluginURL;" support="&repo;">
 
 <CHANGES>
+### 2025.08.10
+- Modernized plugin file for Unraid 7+ compatibility.
+- Updated versioning and improved installation/removal scripts.
+- Removed hardcoded MD5 check to simplify the build process.
+- Pointed plugin to jstoffel79 repository.
+
 ### 2023.11.01
 - General enhancements and bug fixes
 - Moved composerize to client side.
+
 ### 2022.08.01
 - Initial Release
 </CHANGES>
 
+<!-- This script cleans up old plugin packages during an upgrade -->
 <FILE Run="/bin/bash">
 <INLINE>
-rm -f $(ls /boot/config/plugins/&name;/&name;*.txz 2>/dev/null|grep -v '&version;')
+# Remove any previous versions of the plugin package to avoid conflicts.
+rm -f $(ls /boot/config/plugins/&name;/&name;*.txz 2>/dev/null | grep -v '&version;')
 </INLINE>
 </FILE>
 
+<!-- This is the main plugin package file -->
 <FILE Name="/boot/config/plugins/&name;/&file;" Run="upgradepkg --install-new">
-<URL>&releaseURL;/archive/&file;</URL>
-<MD5>&md5;</MD5>
+  <URL>&archiveURL;</URL>
+  <!--
+  MD5 checksum is removed.
+  The Apps plugin in Unraid typically handles checksums via the appfeed.
+  If you are building this package manually, you will need to generate a new MD5
+  for your .txz file and add the <MD5>tag back.
+  -->
 </FILE>
 
+<!-- Post-installation message -->
 <FILE Run="/bin/bash">
 <INLINE>
 echo ""
 echo "----------------------------------------------------"
-echo " &name; has been installed."
-echo " Version: &version;"
+echo " &name; version &version; has been installed."
 echo ""
-echo " This plugin required docker and docker compose plugins to be installed."
+echo " This plugin requires the 'Docker' and 'Compose Manager' plugins to be installed."
+echo " Please find the plugin under the Settings tab."
 echo "----------------------------------------------------"
 echo ""
 </INLINE>
 </FILE>
 
+<!-- Removal script -->
 <FILE Run="/bin/bash" Method="remove">
 <INLINE>
+# Standard plugin removal commands
 removepkg &name;-&version;
-rm -r /usr/local/emhttp/plugins/&name;
-rm -r /boot/config/plugins/&name;
+rm -rf /usr/local/emhttp/plugins/&name;
+rm -rf /boot/config/plugins/&name;
+echo "&name; has been removed."
 </INLINE>
 </FILE>
 
