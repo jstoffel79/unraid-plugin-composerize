@@ -22,7 +22,7 @@ usage() {
     echo "Usage: $SCRIPT_NAME <plugin_file.plg> [branch] [version]"
     echo "  <plugin_file.plg>  : The .plg file for the plugin."
     echo "  [branch]           : (Optional) The git branch to set. Defaults to 'main'."
-    echo "  [version]          : (Optional) The version to set. Defaults to current date (YYYYMMDD)."
+    echo "  [version]          : (Optional) The version to set. Defaults to current date (YYYY.MM.DD)."
     exit 1
 }
 
@@ -58,7 +58,7 @@ fi
 
 PLUGIN_FILE="$1"
 BRANCH="${2:-main}"
-VERSION="${3:-$(date +%Y%m%d)}"
+VERSION="${3:-$(date +%Y.%m.%d)}" # <-- This line is updated
 
 # Detect OS and set command prefixes for cross-compatibility (macOS vs Linux)
 SED_CMD="sed"
