@@ -10,6 +10,11 @@
  * should be loaded from a helper file.
  */
 
+// --- DEBUGGING: Temporarily enable error reporting to diagnose the blank page issue ---
+ini_set('display_errors', 1);
+error_reporting(E_ALL);
+// --- END DEBUGGING ---
+
 // --- Configuration ---
 declare(strict_types=1);
 
@@ -18,8 +23,18 @@ define('PLUGIN_ROOT', '/plugins/composerize');
 define('PLUGIN_API_URL', PLUGIN_ROOT . '/api.php');
 
 // It's good practice to include dependencies at the top.
-// Ensure this file defines getDockerTemplateList().
-require_once __DIR__ . '/include/composerize.php';
+// We'll wrap this in a try-catch to see if it's the source of the error.
+try {
+    require_once __DIR__ . '/include/composerize.php';
+} catch (Throwable $t) {
+    // If this message is displayed, the 'composerize.php' file is causing the error.
+    echo "<h1>Fatal Error</h1>";
+    echo "<p>Could not load the required helper file: <code>/include/composerize.php</code></p>";
+    echo "<p><strong>Error Message:</strong> " . $t->getMessage() . "</p>";
+    echo "<p><strong>File:</strong> " . $t->getFile() . " on line " . $t->getLine() . "</p>";
+    echo "<pre>" . $t->getTraceAsString() . "</pre>";
+    exit;
+}
 
 ?>
 <!DOCTYPE html>
