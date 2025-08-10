@@ -56,14 +56,19 @@ jobs:
           else
             echo "No changes to commit."
           fi
+      
+      # Step 7: Generate a dynamic tag name based on the current date
+      - name: Generate tag name
+        id: tag
+        run: echo "tag_name=v$(date +%Y.%m.%d)" >> $GITHUB_OUTPUT
 
-      # Step 7: Create a GitHub Release and upload the build artifacts
+      # Step 8: Create a GitHub Release and upload the build artifacts
       # This uses a popular action to create a release and attach the files.
       - name: Create Release and Upload Assets
         uses: softprops/action-gh-release@v2
         with:
-          # The tag will be created automatically, e.g., v2025.08.10
-          tag_name: v$(date +%Y.%m.%d)
+          # Use the output from the previous step as the tag name
+          tag_name: ${{ steps.tag.outputs.tag_name }}
           # The files to attach to the release.
           # It looks for the .txz file in the 'archive' directory and the updated .plg file.
           files: |
