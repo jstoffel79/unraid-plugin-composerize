@@ -2,6 +2,7 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name         "composerize">
 <!ENTITY author       "jstoffel79">
+<!ENTITY md5         "191884f5d9aa32f03e1540082646629f">
 <!ENTITY version      "20250810">
 <!ENTITY launch       "Settings/Composerize">
 <!ENTITY branch       "main">
