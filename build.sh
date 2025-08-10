@@ -1,101 +1,150 @@
 #!/bin/bash
 
-# Detect MAC OSX
-if [ "$(uname)" == "Darwin" ]; then
-  PREFIX="g"
-else
-  PREFIX=""
+# A modernized script to build Unraid plugin packages.
+# It automatically packages the source, calculates the MD5 hash,
+# and updates the .plg file with the new version and hash.
+
+# --- Configuration ---
+# Exit immediately if a command exits with a non-zero status.
+# Treat unset variables as an error when substituting.
+# Exit with a non-zero status if any command in a pipeline fails.
+set -euo pipefail
+
+# --- Globals ---
+readonly ARCHIVE_DIR="./archive"
+readonly SOURCE_DIR="./source"
+readonly SCRIPT_NAME=$(basename "$0")
+
+# --- Functions ---
+
+# Print a usage message and exit.
+usage() {
+    echo "Usage: $SCRIPT_NAME <plugin_file.plg> [branch] [version]"
+    echo "  <plugin_file.plg>  : The .plg file for the plugin."
+    echo "  [branch]           : (Optional) The git branch to set. Defaults to 'main'."
+    echo "  [version]          : (Optional) The version to set. Defaults to current date (YYYYMMDD)."
+    exit 1
+}
+
+# Log a message to the console.
+# Arguments:
+#   $1: The message to log.
+#   $2: The color of the message (optional).
+log() {
+    local color_reset='\033[0m'
+    local color_green='\033[0;32m'
+    local color_red='\033[0;31m'
+    local color_yellow='\033[0;33m'
+    local color_blue='\033[0;34m'
+    local color_code
+
+    case "${2:-}" in
+        green)  color_code="$color_green" ;;
+        red)    color_code="$color_red" ;;
+        yellow) color_code="$color_yellow" ;;
+        blue)   color_code="$color_blue" ;;
+        *)      color_code="" ;;
+    esac
+
+    printf "${color_code}%s${color_reset}\n" "$1"
+}
+
+# --- Main Script ---
+
+# Argument validation
+if [[ "$#" -lt 1 || "$#" -gt 3 || "${1##*.}" != "plg" ]]; then
+    usage
 fi
-
-set -e
-
-USAGE="Usage: $(basename "$0") <plugin> [branch] [version]"
-ARCHIVE_DIR="./archive"
-SOURCE_DIR="./source"
 
 PLUGIN_FILE="$1"
-BRANCH="$2"
-VERSION="$3"
+BRANCH="${2:-main}"
+VERSION="${3:-$(date +%Y%m%d)}"
 
-# Validate arguments
-if [ "$#" -lt 1 ] || [ "$#" -gt 3 ]; then
-    echo "$USAGE"
-    exit 1
+# Detect OS and set command prefixes for cross-compatibility (macOS vs Linux)
+SED_CMD="sed"
+TAR_CMD="tar"
+MD5_CMD="md5sum"
+if [[ "$(uname)" == "Darwin" ]]; then
+    SED_CMD="gsed" # Requires gnu-sed on macOS: `brew install gnu-sed`
+    TAR_CMD="gtar" # Requires gnu-tar on macOS: `brew install gnu-tar`
+    MD5_CMD="md5 -r"
 fi
 
-if [[ $PLUGIN_FILE != *.plg ]]; then
-    echo "$USAGE"
-    exit 1
-fi
+# Check for required commands
+for cmd in "$SED_CMD" "$TAR_CMD" "dos2unix"; do
+    if ! command -v "$cmd" &> /dev/null; then
+        log "Error: Required command '$cmd' is not installed. Please install it to continue." "red"
+        exit 1
+    fi
+done
 
-if [ -z "$BRANCH" ]; then
-  BRANCH="main"
-fi
-
-if [ -z "$VERSION" ]; then
-  VERSION=$(date +%Y%m%d)
-fi
-
-# Extract name from plugin file - source dir must match
-NAME=$("${PREFIX}sed" -n 's/<!ENTITY[[:space:]]\+name[[:space:]]\+"\(.*\)">/\1/p' "$PLUGIN_FILE")
-if [ -z "$NAME" ]; then
-    echo "Error: Pattern not found in the file."
+# Extract the plugin name from the .plg file using sed
+NAME=$("$SED_CMD" -n 's/<!ENTITY[[:space:]]\+name[[:space:]]\+"\(.*\)">/\1/p' "$PLUGIN_FILE")
+if [[ -z "$NAME" ]]; then
+    log "Error: Could not extract plugin name from '$PLUGIN_FILE'." "red"
     exit 1
 fi
 
 FILE_NAME="$NAME-$VERSION.txz"
 PACKAGE_DIR="$SOURCE_DIR/$NAME"
 
-# Validate source
-if [ -d "$PACKAGE_DIR" ]; then
-    if [ -z "$(ls -A "$PACKAGE_DIR")" ]; then
-        echo "Folder exists but is empty."
+# Validate that the source directory exists and is not empty
+if [[ ! -d "$PACKAGE_DIR" || -z "$(ls -A "$PACKAGE_DIR")" ]]; then
+    log "Error: Source directory '$PACKAGE_DIR' does not exist or is empty." "red"
+    exit 1
+fi
+
+log "================================================" "blue"
+log "     Building Unraid Plugin Package"
+log "================================================" "blue"
+log "Plugin:  $PLUGIN_FILE"
+log "Name:    $NAME"
+log "Source:  $PACKAGE_DIR"
+log "Archive: $ARCHIVE_DIR"
+log "Version: $VERSION"
+log "Branch:  $BRANCH"
+log "================================================" "blue"
+
+# Create archive directory and define the full path for the output file
+mkdir -p "$ARCHIVE_DIR"
+readonly OUTPUT_FILE="$(realpath "$ARCHIVE_DIR")/$FILE_NAME"
+
+# Temporarily change to the package directory to create the archive
+(
+    cd "$PACKAGE_DIR"
+    log "\nSetting file permissions..."
+    # Ensure all text files have Unix line endings
+    find usr -type f -exec dos2unix {} \;
+    # Set standard permissions for plugin files
+    chmod -R 755 usr/
+
+    log "Creating archive: $FILE_NAME..."
+    # Create a compressed tarball with root ownership
+    "$TAR_CMD" -cJf "$OUTPUT_FILE" --owner=0 --group=0 usr/
+)
+
+log "Verifying package..."
+if [[ -f "$OUTPUT_FILE" ]]; then
+    # Calculate MD5 hash
+    hash=$($MD5_CMD "$OUTPUT_FILE" | cut -f 1 -d " ")
+
+    if [[ -z "$hash" ]]; then
+        log "Error: Could not calculate MD5 hash for the archive." "red"
         exit 1
     fi
+
+    log "Packaged successfully! MD5: $hash" "green"
+
+    log "Updating plugin info file..."
+    # Use sed to update the .plg file in-place with the new info
+    "$SED_CMD" -i.bak -e "/<!ENTITY md5/s/\".*\"/\"$hash\"/" \
+                       -e "/<!ENTITY version/s/\".*\"/\"$VERSION\"/" \
+                       -e "/<!ENTITY branch/s/\".*\"/\"$BRANCH\"/" \
+                       "$PLUGIN_FILE"
+    rm "${PLUGIN_FILE}.bak" # Clean up the backup file created by sed
 else
-    echo "Folder does not exist."
+    log "Error: Failed to build package!" "red"
     exit 1
 fi
 
-echo "================================================"
-echo "           Building UnRaid plugin package"
-echo "================================================"
-echo "Plugin: ${PLUGIN_FILE}"
-echo "Name: ${NAME}"
-echo "Source: ${PACKAGE_DIR}"
-echo "Archive: ${ARCHIVE_DIR}"
-echo "================================================"
-
-mkdir -p "$ARCHIVE_DIR"
-FILE="$(realpath ${ARCHIVE_DIR})/$FILE_NAME"
-
-
-pushd "$PACKAGE_DIR"
-  echo "Setting file permissions..."
-  find usr -type f -exec dos2unix {} \;
-  chmod -R 755 usr/
-
-  echo "Creating archive..."
-  "${PREFIX}tar" -cJf "$FILE" --owner=0 --group=0 usr/
-popd
-
-echo "Verifying package"
-if [ -f "$FILE" ]; then
-  hash=$(md5sum "$FILE" | cut -f 1 -d " ")
-
-  if [ -z "$hash" ]; then
-    echo "Could not verify archive"
-    exit 1
-  fi
-
-  echo "Packaged successfully: ${hash}"
-
-  echo "Updating plugin info..."
-  "${PREFIX}sed" -i.bak '/'"<!ENTITY md5"'/s/.*/'"<!ENTITY md5 \"${hash}\">"'/' "${PLUGIN_FILE}"
-  "${PREFIX}sed" -i.bak '/'"<!ENTITY version"'/s/.*/'"<!ENTITY version \"${VERSION}\">"'/' "${PLUGIN_FILE}"
-  "${PREFIX}sed" -i.bak '/'"<!ENTITY branch"'/s/.*/'"<!ENTITY branch \"${BRANCH}\">"'/' "${PLUGIN_FILE}"
-else
-  echo "Failed to build package!"
-fi
-
-echo "Done."
+log "\nDone." "green"
