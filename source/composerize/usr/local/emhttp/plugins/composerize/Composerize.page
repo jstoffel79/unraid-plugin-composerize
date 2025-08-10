@@ -5,37 +5,16 @@ Type="xmenu"
 Menu="Utilities"
 ---
 <?php
-// --- DEBUGGING: Temporarily enable error reporting to diagnose the blank page issue ---
-ini_set('display_errors', '1');
-ini_set('display_startup_errors', '1');
-error_reporting(E_ALL);
-echo "<!-- DEBUG: PHP script started. -->";
-// --- END DEBUGGING ---
-
 /**
  * Composerize Plugin UI for Unraid 7.
- *
- * This script generates the user interface for selecting a Docker template
- * and converting it into a Docker Compose file. It uses modern HTML,
- * vanilla JavaScript, and updated styling.
- *
- * It assumes the presence of a getDockerTemplateList() function which
- * should be loaded from a helper file.
  */
 
-// --- Configuration ---
 declare(strict_types=1);
 
-// Define constants for paths to make the code cleaner and easier to maintain.
 define('PLUGIN_ROOT', '/plugins/composerize');
 define('PLUGIN_API_URL', PLUGIN_ROOT . '/api.php');
 
-echo "<!-- DEBUG: Constants defined. Attempting to include helper file. -->";
-
-// It's good practice to include dependencies at the top.
 require_once __DIR__ . '/include/composerize.php';
-
-echo "<!-- DEBUG: Helper file composerize.php included successfully. Page should now render. -->";
 
 ?>
 <!DOCTYPE html>
@@ -45,14 +24,13 @@ echo "<!-- DEBUG: Helper file composerize.php included successfully. Page should
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Composerize</title>
     <style>
-        /* Modern CSS for a clean and responsive layout */
         :root {
-            --primary-bg: #2d3748; /* slate-800 */
-            --secondary-bg: #4a5568; /* slate-600 */
-            --border-color: #718096; /* slate-500 */
-            --text-color: #e2e8f0; /* slate-200 */
-            --accent-color: #38a169; /* green-500 */
-            --error-color: #c53030; /* red-600 */
+            --primary-bg: #2d3748;
+            --secondary-bg: #4a5568;
+            --border-color: #718096;
+            --text-color: #e2e8f0;
+            --accent-color: #38a169;
+            --error-color: #c53030;
             --font-family: 'Inter', sans-serif;
             --monospace-font: 'Fira Code', 'Cascadia Code', monospace;
         }
@@ -117,10 +95,8 @@ echo "<!-- DEBUG: Helper file composerize.php included successfully. Page should
             cursor: not-allowed;
         }
         #submit-button { background-color: var(--accent-color); }
-        #undo-button { background-color: #d69e2e; } /* yellow-600 */
-        #reset-button { background-color: #9b2c2c; } /* red-700 */
-
-        /* Custom Modal for Notifications */
+        #undo-button { background-color: #d69e2e; }
+        #reset-button { background-color: #9b2c2c; }
         .modal-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0, 0, 0, 0.6); display: flex;
@@ -137,13 +113,11 @@ echo "<!-- DEBUG: Helper file composerize.php included successfully. Page should
         .modal-buttons { margin-top: 1.5rem; display: flex; gap: 1rem; justify-content: center; }
         .modal-buttons button { width: auto; padding: 0.5rem 1.5rem; }
     </style>
-    <!-- Using a modern font from Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Fira+Code&display=swap" rel="stylesheet">
 </head>
 <body>
-
 <div class="container">
     <div class="panel">
         <h2>Select a Template</h2>
@@ -154,7 +128,6 @@ echo "<!-- DEBUG: Helper file composerize.php included successfully. Page should
             <?php endforeach; ?>
         </select>
     </div>
-
     <div class="panel">
         <h2>Compose Preview</h2>
         <textarea id="compose-text" spellcheck="false" placeholder="Select a template to see the Docker Compose preview..."></textarea>
@@ -165,8 +138,6 @@ echo "<!-- DEBUG: Helper file composerize.php included successfully. Page should
         </div>
     </div>
 </div>
-
-<!-- Modal for notifications and confirmations -->
 <div id="notification-modal" class="modal-overlay">
     <div class="modal-content">
         <h3 id="modal-title"></h3>
@@ -174,26 +145,21 @@ echo "<!-- DEBUG: Helper file composerize.php included successfully. Page should
         <div id="modal-buttons" class="modal-buttons"></div>
     </div>
 </div>
-
 <script src="<?= htmlspecialchars(PLUGIN_ROOT); ?>/js/composerize.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-    // --- Element References ---
     const templateSelect = document.getElementById('template-select');
     const composeText = document.getElementById('compose-text');
     const submitButton = document.getElementById('submit-button');
     const undoButton = document.getElementById('undo-button');
     const resetButton = document.getElementById('reset-button');
+    let originalCompose = '';
 
-    // --- State Management ---
-    let originalCompose = ''; // Store the initial generated compose content
-
-    // --- API and Notifications ---
     const showNotification = (title, text, buttons = [{ label: 'OK', action: hideNotification }]) => {
         document.getElementById('modal-title').textContent = title;
         document.getElementById('modal-text').textContent = text;
         const modalButtons = document.getElementById('modal-buttons');
-        modalButtons.innerHTML = ''; // Clear previous buttons
+        modalButtons.innerHTML = '';
         buttons.forEach(btnInfo => {
             const button = document.createElement('button');
             button.textContent = btnInfo.label;
@@ -213,7 +179,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const formData = new FormData();
             formData.append('name', name);
             formData.append('compose', compose);
-            formData.append('force', String(force)); // Send boolean as string
+            formData.append('force', String(force));
 
             const response = await fetch('<?= htmlspecialchars(PLUGIN_API_URL); ?>', {
                 method: 'POST',
@@ -224,7 +190,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (response.ok) {
                 showNotification('Success!', result.message);
-            } else if (response.status === 409) { // Conflict - stack exists
+            } else if (response.status === 409) {
                 showNotification('Stack Exists', result.error, [
                     { label: 'Cancel', action: hideNotification },
                     { label: 'Overwrite', class: 'error', action: () => {
@@ -233,7 +199,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     }}
                 ]);
             } else {
-                // Handle other client/server errors (400, 500)
                 showNotification('Error!', result.error || 'An unknown error occurred.');
             }
         } catch (error) {
@@ -242,13 +207,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    // --- Event Listeners ---
     templateSelect.addEventListener('change', () => {
         const selectedOption = templateSelect.options[templateSelect.selectedIndex];
         const templatePath = selectedOption.value;
-
         if (templatePath) {
-            // The composerize function is from composerize.min.js
             originalCompose = composerize(templatePath);
             composeText.value = originalCompose;
             submitButton.disabled = false;
@@ -261,13 +223,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    undoButton.addEventListener('click', () => {
-        composeText.value = originalCompose;
-    });
+    undoButton.addEventListener('click', () => { composeText.value = originalCompose; });
 
     resetButton.addEventListener('click', () => {
         templateSelect.selectedIndex = 0;
-        // Manually trigger the change event to reset the UI state
         templateSelect.dispatchEvent(new Event('change'));
     });
 
@@ -280,10 +239,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         makeApiRequest(name, compose);
     });
-
-    console.log('Composerize UI Ready!');
 });
 </script>
-
 </body>
 </html>
