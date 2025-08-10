@@ -17,8 +17,9 @@ define('DOCKER_TEMPLATE_DIRECTORY', '/boot/config/plugins/dockerMan/templates-us
 define('COMPOSE_DIRECTORY', '/boot/config/plugins/compose.manager/projects/');
 
 // It's best practice to include dependencies at the top of the file.
-// This ensures that all necessary code is loaded before execution begins.
+// These files provide the necessary functions from Unraid's Docker Manager.
 require_once '/usr/local/emhttp/plugins/dynamix.docker.manager/include/DockerClient.php';
+require_once '/usr/local/emhttp/plugins/dynamix.docker.manager/include/Helpers.php';
 
 /**
  * Validates a given string to see if it's a non-empty YAML string.
