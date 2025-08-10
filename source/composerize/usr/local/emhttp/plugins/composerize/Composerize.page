@@ -1,3 +1,9 @@
+---
+Title="Composerize"
+Icon="composerize.png"
+Type="xmenu"
+Menu="Utilities"
+---
 <?php
 /**
  * Composerize Plugin UI for Unraid 7.
@@ -9,11 +15,6 @@
  * It assumes the presence of a getDockerTemplateList() function which
  * should be loaded from a helper file.
  */
-
-// --- DEBUGGING: Temporarily enable error reporting to diagnose the blank page issue ---
-ini_set('display_errors', 1);
-error_reporting(E_ALL);
-// --- END DEBUGGING ---
 
 // --- Configuration ---
 declare(strict_types=1);
