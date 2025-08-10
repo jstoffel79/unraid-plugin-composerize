@@ -19,7 +19,7 @@ define('PLUGIN_API_URL', PLUGIN_ROOT . '/api.php');
 
 // It's good practice to include dependencies at the top.
 // Ensure this file defines getDockerTemplateList().
-require_once '/usr/local/emhttp' . PLUGIN_ROOT . '/include/composerize.php';
+require_once __DIR__ . '/include/composerize.php';
 
 ?>
 <!DOCTYPE html>
@@ -197,7 +197,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const formData = new FormData();
             formData.append('name', name);
             formData.append('compose', compose);
-            formData.append('force', force);
+            formData.append('force', String(force)); // Send boolean as string
 
             const response = await fetch('<?= htmlspecialchars(PLUGIN_API_URL); ?>', {
                 method: 'POST',
