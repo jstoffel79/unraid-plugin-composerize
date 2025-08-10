@@ -85,6 +85,17 @@ if [[ -z "$NAME" ]]; then
     exit 1
 fi
 
+# Ensure the plugin file has a placeholder for the md5 hash.
+# Unraid's installer can fail if this entity is missing completely.
+if ! grep -q "<!ENTITY md5" "$PLUGIN_FILE"; then
+    log "Warning: The md5 entity was not found. Adding a placeholder to '$PLUGIN_FILE'." "yellow"
+    # Insert a placeholder md5 entity before the version entity for consistency.
+    "$SED_CMD" -i.bak '/<!ENTITY version/i\
+<!ENTITY md5         "placeholder">
+' "$PLUGIN_FILE"
+    rm "${PLUGIN_FILE}.bak"
+fi
+
 FILE_NAME="$NAME-$VERSION.txz"
 PACKAGE_DIR="$SOURCE_DIR/$NAME"
 
