@@ -60,17 +60,19 @@ function getDockerTemplateList(): array
     $files = glob(DOCKER_TEMPLATE_DIRECTORY . '*.xml');
 
     if ($files === false) {
-        error_log('Composerize Plugin: Failed to read Docker template directory.');
+        // Use Unraid's built-in logger for better integration.
+        logger('Composerize Plugin: Failed to read Docker template directory: ' . DOCKER_TEMPLATE_DIRECTORY);
         return [];
     }
 
     foreach ($files as $file) {
         try {
             // This function from Helpers.php can fail on malformed templates.
+            // We wrap it in a try-catch to prevent the entire page from crashing.
             $info = xmlToCommand($file, false);
 
             if (!is_array($info) || empty($info[0]) || empty($info[1])) {
-                error_log("Composerize Plugin: Failed to parse template file: {$file}");
+                logger("Composerize Plugin: Skipped template with invalid format: {$file}");
                 continue;
             }
             
@@ -83,8 +85,9 @@ function getDockerTemplateList(): array
 
             $dockerTemplates[$name] = $command;
         } catch (Throwable $t) {
-            // Catch the fatal error from xmlToCommand and log it, then continue.
-            error_log("Composerize Plugin: Skipped incompatible template {$file}. Error: " . $t->getMessage());
+            // If xmlToCommand() throws a fatal error (like the key_exists issue), we catch it here.
+            logger("Composerize Plugin: Skipped incompatible template {$file}. Error: " . $t->getMessage());
+            // Continue to the next file instead of crashing.
         }
     }
 
