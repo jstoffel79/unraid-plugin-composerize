@@ -1,31 +1,20 @@
 <?php
 /**
  * composerize.php - Helper functions for the Composerize Unraid Plugin.
- *
- * This file contains the backend logic for finding Docker templates,
- * converting them to docker run commands, and installing compose files.
- *
- * PHP version 7.4+
  */
 
-// Use strict types for better code quality and error detection.
 declare(strict_types=1);
 
 // --- Constants ---
-// Define constants for directory paths to avoid magic strings and for easier maintenance.
 define('DOCKER_TEMPLATE_DIRECTORY', '/boot/config/plugins/dockerMan/templates-user/');
 define('COMPOSE_DIRECTORY', '/boot/config/plugins/compose.manager/projects/');
 
-// It's best practice to include dependencies at the top of the file.
-// These files provide the necessary functions from Unraid's Docker Manager.
+// --- Dependencies ---
 require_once '/usr/local/emhttp/plugins/dynamix.docker.manager/include/DockerClient.php';
 require_once '/usr/local/emhttp/plugins/dynamix.docker.manager/include/Helpers.php';
 
 /**
  * Validates a given string to see if it's a non-empty YAML string.
- *
- * @param string|null $yamlString The YAML string to validate.
- * @return bool True if the string is not null or empty, false otherwise.
  */
 function isValidYaml(?string $yamlString): bool
 {
@@ -34,13 +23,6 @@ function isValidYaml(?string $yamlString): bool
 
 /**
  * Installs a Docker Compose stack to the disk.
- *
- * @param string $name    The name of the Docker Compose stack.
- * @param string $compose The Docker Compose YAML configuration as a string.
- * @param bool   $force   If true, any existing stack with the same name will be overwritten.
- *
- * @return bool True on success.
- * @throws Exception if the directory cannot be created or files cannot be written.
  */
 function installCompose(string $name, string $compose, bool $force): bool
 {
@@ -69,8 +51,6 @@ function installCompose(string $name, string $compose, bool $force): bool
 /**
  * Scans the user templates directory for Docker XML templates and converts them
  * into an array of 'docker run' commands.
- *
- * @return array An associative array mapping the template name to its command string.
  */
 function getDockerTemplateList(): array
 {
