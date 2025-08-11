@@ -10,6 +10,7 @@ define('COMPOSE_DIRECTORY', '/boot/config/plugins/compose.manager/projects/');
 
 // --- Dependencies ---
 require_once '/usr/local/emhttp/plugins/dynamix.docker.manager/include/DockerClient.php';
+require_once '/usr/local/emhttp/plugins/dynamix.docker.manager/include/Helpers.php';
 
 /**
  * Validates a given string to see if it's a non-empty YAML string.
@@ -32,96 +33,27 @@ function installCompose(string $name, string $compose, bool $force): bool
         return false;
     }
 
-    if (!is_dir($composeProjectDirectory) && !@mkdir($composeProjectDirectory, 0755, true)) {
-        throw new Exception("Failed to create project directory: {$composeProjectDirectory}");
+    // Use a more robust check for directory creation
+    if (!is_dir($composeProjectDirectory)) {
+        if (!mkdir($composeProjectDirectory, 0755, true)) {
+            // Throw a specific error if directory creation fails
+            throw new Exception("Failed to create project directory. Check permissions for: " . COMPOSE_DIRECTORY);
+        }
     }
 
+    // Use file_put_contents and check for failure
     $nameWritten = file_put_contents($composeNameFilePath, $name);
-    $yamlWritten = file_put_contents($composeYamlFilePath, $compose);
+    if ($nameWritten === false) {
+        throw new Exception("Failed to write 'name' file. Check permissions for: {$composeProjectDirectory}");
+    }
 
-    if ($nameWritten === false || $yamlWritten === false) {
-        throw new Exception("Failed to write compose files to disk for stack: {$name}");
+    $yamlWritten = file_put_contents($composeYamlFilePath, $compose);
+    if ($yamlWritten === false) {
+        throw new Exception("Failed to write 'docker-compose.yml' file. Check permissions for: {$composeProjectDirectory}");
     }
 
     return true;
 }
-
-/**
- * Manually parses a Docker template XML and builds a 'docker run' command.
- * This is more robust than relying on Unraid's internal functions.
- */
-function buildDockerRunCommand(SimpleXMLElement $xml): ?string
-{
-    if (!isset($xml->Name) || !isset($xml->Repository)) {
-        return null;
-    }
-
-    $command = ['docker run'];
-    $command[] = '--name=' . escapeshellarg((string)$xml->Name);
-
-    if (isset($xml->Network) && (string)$xml->Network !== 'bridge') {
-        $command[] = '--net=' . escapeshellarg((string)$xml->Network);
-    }
-
-    if (isset($xml->Privileged) && strtolower((string)$xml->Privileged) === 'true') {
-        $command[] = '--privileged';
-    }
-
-    if (isset($xml->Restart)) {
-        $command[] = '--restart=' . escapeshellarg((string)$xml->Restart);
-    }
-    
-    if (isset($xml->ExtraParams)) {
-        $command[] = (string)$xml->ExtraParams;
-    }
-
-    // Process all Config tags (Ports, Paths, Variables, etc.)
-    if (isset($xml->Config)) {
-        foreach ($xml->Config as $config) {
-            $attributes = $config->attributes();
-            $type = isset($attributes['Type']) ? (string)$attributes['Type'] : '';
-            $value = (string)$config;
-
-            // Use the Default value from the attribute if the main value is empty
-            if ($value === '' && isset($attributes['Default'])) {
-                $value = (string)$attributes['Default'];
-            }
-
-            switch ($type) {
-                case 'Port':
-                    $hostPort = $value;
-                    $containerPort = (string)$attributes['Target'];
-                    if (!empty($hostPort) && !empty($containerPort)) {
-                        $command[] = '-p ' . escapeshellarg($hostPort . ':' . $containerPort);
-                    }
-                    break;
-
-                case 'Path':
-                    $hostPath = $value;
-                    $containerPath = (string)$attributes['Target'];
-                    if (!empty($hostPath) && !empty($containerPath)) {
-                        $command[] = '-v ' . escapeshellarg($hostPath . ':' . $containerPath);
-                    }
-                    break;
-                
-                case 'Variable':
-                    $name = (string)$attributes['Target'];
-                    if (isset($name)) {
-                        // Only add environment variables that have a value.
-                        if ($value !== '') {
-                            $command[] = '-e ' . escapeshellarg($name . '=' . $value);
-                        }
-                    }
-                    break;
-            }
-        }
-    }
-
-    $command[] = escapeshellarg((string)$xml->Repository);
-    
-    return implode(' ', array_filter($command));
-}
-
 
 /**
  * Gets a list of templates for currently running Docker containers.
@@ -166,7 +98,6 @@ function getDockerTemplateList(): array
             $templateName = (string)$xml->Name;
 
             if (in_array($templateName, $runningContainerNames)) {
-                // This template is for a running container, so we process it.
                 $command = buildDockerRunCommand($xml);
                 if ($command) {
                     $dockerTemplates[$templateName] = $command;
@@ -181,4 +112,70 @@ function getDockerTemplateList(): array
 
     ksort($dockerTemplates);
     return $dockerTemplates;
+}
+
+/**
+ * Manually parses a Docker template XML and builds a 'docker run' command.
+ */
+function buildDockerRunCommand(SimpleXMLElement $xml): ?string
+{
+    if (!isset($xml->Name) || !isset($xml->Repository)) {
+        return null;
+    }
+
+    $command = ['docker run'];
+    $command[] = '--name=' . escapeshellarg((string)$xml->Name);
+
+    if (isset($xml->Network) && (string)$xml->Network !== 'bridge') {
+        $command[] = '--net=' . escapeshellarg((string)$xml->Network);
+    }
+
+    if (isset($xml->Privileged) && strtolower((string)$xml->Privileged) === 'true') {
+        $command[] = '--privileged';
+    }
+    
+    if (isset($xml->ExtraParams)) {
+        $command[] = (string)$xml->ExtraParams;
+    }
+
+    if (isset($xml->Config)) {
+        foreach ($xml->Config as $config) {
+            $attributes = $config->attributes();
+            $type = isset($attributes['Type']) ? (string)$attributes['Type'] : '';
+            $value = (string)$config;
+
+            if ($value === '' && isset($attributes['Default'])) {
+                $value = (string)$attributes['Default'];
+            }
+
+            switch ($type) {
+                case 'Port':
+                    $hostPort = $value;
+                    $containerPort = (string)$attributes['Target'];
+                    if (!empty($hostPort) && !empty($containerPort)) {
+                        $command[] = '-p ' . escapeshellarg($hostPort . ':' . $containerPort);
+                    }
+                    break;
+
+                case 'Path':
+                    $hostPath = $value;
+                    $containerPath = (string)$attributes['Target'];
+                    if (!empty($hostPath) && !empty($containerPath)) {
+                        $command[] = '-v ' . escapeshellarg($hostPath . ':' . $containerPath);
+                    }
+                    break;
+                
+                case 'Variable':
+                    $name = (string)$attributes['Target'];
+                    if (isset($name) && $value !== '') {
+                        $command[] = '-e ' . escapeshellarg($name . '=' . $value);
+                    }
+                    break;
+            }
+        }
+    }
+
+    $command[] = escapeshellarg((string)$xml->Repository);
+    
+    return implode(' ', array_filter($command));
 }
