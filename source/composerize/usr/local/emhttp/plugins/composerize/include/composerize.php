@@ -1,9 +1,9 @@
 <?php
+declare(strict_types=1);
+
 /**
  * composerize.php - Helper functions for the Composerize Unraid Plugin.
  */
-
-declare(strict_types=1);
 
 // --- Constants ---
 define('DOCKER_TEMPLATE_DIRECTORY', '/boot/config/plugins/dockerMan/templates-user/');
