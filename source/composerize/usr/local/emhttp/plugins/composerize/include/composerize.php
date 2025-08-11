@@ -10,7 +10,7 @@ define('COMPOSE_DIRECTORY', '/boot/config/plugins/compose.manager/projects/');
 
 // --- Dependencies ---
 require_once '/usr/local/emhttp/plugins/dynamix.docker.manager/include/DockerClient.php';
-require_once '/usr/local/emhttp/plugins/dynamix.docker.manager/include/Helpers.php';
+// We no longer need Helpers.php because we are parsing the XML manually.
 
 /**
  * Validates a given string to see if it's a non-empty YAML string.
@@ -48,8 +48,59 @@ function installCompose(string $name, string $compose, bool $force): bool
 }
 
 /**
+ * Manually parses a Docker template XML and builds a 'docker run' command.
+ * This bypasses the buggy xmlToCommand() function in Unraid's Helpers.php.
+ */
+function buildDockerRunCommand(SimpleXMLElement $xml): ?string
+{
+    if (!isset($xml->Name) || !isset($xml->Repository)) {
+        return null;
+    }
+
+    $command = ['docker run'];
+    $command[] = '--name=' . escapeshellarg((string)$xml->Name);
+
+    if (isset($xml->Network) && (string)$xml->Network !== 'bridge') {
+        $command[] = '--net=' . escapeshellarg((string)$xml->Network);
+    }
+
+    if (isset($xml->Privileged) && strtolower((string)$xml->Privileged) === 'true') {
+        $command[] = '--privileged';
+    }
+    
+    if (isset($xml->ExtraParams)) {
+        $command[] = (string)$xml->ExtraParams;
+    }
+
+    // Process Ports
+    if (isset($xml->Config) && $xml->Config->attributes()['Type'] == 'Port') {
+        foreach ($xml->Config as $port) {
+            $command[] = '-p ' . escapeshellarg((string)$port->attributes()['HostPort'] . ':' . (string)$port->attributes()['ContainerPort']);
+        }
+    }
+
+    // Process Volumes
+    if (isset($xml->Config) && $xml->Config->attributes()['Type'] == 'Path') {
+         foreach ($xml->Config as $path) {
+            $command[] = '-v ' . escapeshellarg((string)$path->attributes()['HostPath'] . ':' . (string)$path->attributes()['ContainerPath']);
+        }
+    }
+    
+    // Process Environment Variables
+    if (isset($xml->Config) && $xml->Config->attributes()['Type'] == 'Variable') {
+        foreach ($xml->Config as $var) {
+            $command[] = '-e ' . escapeshellarg((string)$var->attributes()['Name'] . '=' . (string)$var->attributes()['Default']);
+        }
+    }
+
+    $command[] = escapeshellarg((string)$xml->Repository);
+    
+    return implode(' ', array_filter($command));
+}
+
+
+/**
  * Gets a list of templates for currently running Docker containers.
- * This function is more robust and cross-references running container names with available templates.
  */
 function getDockerTemplateList(): array
 {
@@ -92,40 +143,15 @@ function getDockerTemplateList(): array
 
             if (in_array($templateName, $runningContainerNames)) {
                 // This template is for a running container, so we process it.
-                $xmlContent = file_get_contents($file);
-                if ($xmlContent === false) continue;
-
-                // Robustly normalize the Network tag to prevent fatal errors in Unraid's helper scripts.
-                // This replaces any existing Network tag (custom, host, etc.) with a simple Bridge default.
-                $xmlContent = preg_replace('/<Network>.*<\/Network>/s', '<Network>Bridge</Network>', $xmlContent, 1, $count);
-                if ($count === 0) {
-                    // If the Network tag was completely missing, add it.
-                    $xmlContent = str_replace('</Container>', "  <Network>Bridge</Network>\n</Container>", $xmlContent);
+                $command = buildDockerRunCommand($xml);
+                if ($command) {
+                    $dockerTemplates[$templateName] = $command;
+                } else {
+                    error_log("Composerize Plugin: Failed to build command for template: {$file}");
                 }
-                
-                $tempFile = tempnam(sys_get_temp_dir(), 'composerize-');
-                file_put_contents($tempFile, $xmlContent);
-                
-                $info = xmlToCommand($tempFile, false);
-
-                unlink($tempFile);
-
-                if (!is_array($info) || empty($info[0]) || empty($info[1])) {
-                    error_log("Composerize Plugin: Skipped template with invalid format after processing: {$file}");
-                    continue;
-                }
-                
-                $command = str_replace(
-                    '/usr/local/emhttp/plugins/dynamix.docker.manager/scripts/docker create',
-                    'docker run',
-                    $info[0]
-                );
-                $name = $info[1];
-
-                $dockerTemplates[$name] = $command;
             }
         } catch (Throwable $t) {
-            error_log("Composerize Plugin: Skipped incompatible template {$file}. Error: " . $t->getMessage());
+            error_log("Composerize Plugin: Skipped template due to an unexpected error {$file}. Error: " . $t->getMessage());
         }
     }
 
