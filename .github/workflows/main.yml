@@ -16,6 +16,10 @@ jobs:
   build:
     runs-on: ubuntu-latest # Use the latest Ubuntu runner for a Linux environment
 
+    # Add this permissions block to allow the job to create a release and push commits.
+    permissions:
+      contents: write
+
     steps:
       # Step 1: Check out the repository's code
       - name: Checkout repository
