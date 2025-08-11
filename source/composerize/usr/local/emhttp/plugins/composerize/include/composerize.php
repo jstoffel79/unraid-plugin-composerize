@@ -1,6 +1,10 @@
 <?php
+declare(strict_types=1);
+
 /**
  * composerize.php - Helper functions for the Composerize Unraid Plugin.
+ * NOTE: The 'declare(strict_types=1);' statement MUST be the very first
+ * line after the opening <?php tag. No comments or blank lines can come before it.
  */
 
 // --- Constants ---
@@ -81,9 +85,8 @@ function getDockerTemplateList(): array
 
             $dockerTemplates[$name] = $command;
         } catch (Throwable $t) {
-            // If xmlToCommand() throws a fatal error (like the key_exists issue), we catch it here.
+            // If xmlToCommand() throws a fatal error, we log it and continue.
             error_log("Composerize Plugin: Skipped incompatible template {$file}. Error: " . $t->getMessage());
-            // Continue to the next file instead of crashing.
         }
     }
 
