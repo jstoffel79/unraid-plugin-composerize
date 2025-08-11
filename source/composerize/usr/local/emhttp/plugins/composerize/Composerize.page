@@ -5,11 +5,11 @@ Type="xmenu"
 Menu="Utilities"
 ---
 <?php
+declare(strict_types=1);
+
 /**
  * Composerize Plugin UI for Unraid 7.
  */
-
-declare(strict_types=1);
 
 define('PLUGIN_ROOT', '/plugins/composerize');
 define('PLUGIN_API_URL', PLUGIN_ROOT . '/api.php');
