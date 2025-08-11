@@ -3,6 +3,9 @@ declare(strict_types=1);
 
 /**
  * composerize.php - Helper functions for the Composerize Unraid Plugin.
+ * * NOTE: The 'declare(strict_types=1);' statement MUST be the very first
+ * line after the opening <?php tag. No comments, blank lines, or even
+ * invisible characters (like a BOM) can come before it.
  */
 
 // --- Constants ---
