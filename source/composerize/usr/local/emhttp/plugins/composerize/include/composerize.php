@@ -51,36 +51,42 @@ function installCompose(string $name, string $compose, bool $force): bool
 }
 
 /**
- * Scans the user templates directory for Docker XML templates and converts them
- * into an array of 'docker run' commands. This function includes a workaround
- * for a common fatal error in Unraid's xmlToCommand function.
+ * Gets a list of templates for currently running Docker containers.
+ * This function queries the Docker client, filters for running containers
+ * that have a user template, and then extracts the run command.
  */
 function getDockerTemplateList(): array
 {
     $dockerTemplates = [];
-    $files = glob(DOCKER_TEMPLATE_DIRECTORY . '*.xml');
+    $dockerClient = new DockerClient();
+    $containers = $dockerClient->getDockerContainers();
+    $filesToProcess = [];
 
-    if ($files === false) {
-        error_log('Composerize Plugin: Failed to read Docker template directory: ' . DOCKER_TEMPLATE_DIRECTORY);
+    // First, collect all unique template files from running containers
+    foreach ($containers as $container) {
+        if ($container['Running'] && isset($container['Template']) && strpos($container['Template'], DOCKER_TEMPLATE_DIRECTORY) === 0) {
+            if (!in_array($container['Template'], $filesToProcess)) {
+                $filesToProcess[] = $container['Template'];
+            }
+        }
+    }
+
+    if (empty($filesToProcess)) {
+        error_log('Composerize Plugin: No running containers with user templates found.');
         return [];
     }
 
-    foreach ($files as $file) {
+    // Now, process only the files for running containers
+    foreach ($filesToProcess as $file) {
         try {
-            // Pre-process the XML to prevent fatal errors in xmlToCommand()
             $xmlContent = file_get_contents($file);
             if ($xmlContent === false) {
                 error_log("Composerize Plugin: Failed to read template file: {$file}");
                 continue;
             }
 
-            // The key_exists() error in Helpers.php happens when the <Network> tag is missing.
-            // We can fix this by adding a default if it's not present.
             if (strpos($xmlContent, '<Network>') === false) {
-                // Inject a default Network tag. This is the most common cause of the crash.
                 $xmlContent = str_replace('</Container>', "  <Network>Bridge</Network>\n</Container>", $xmlContent);
-                
-                // Create a temporary file to pass to the Unraid function
                 $tempFile = tempnam(sys_get_temp_dir(), 'composerize-');
                 file_put_contents($tempFile, $xmlContent);
                 $fileToProcess = $tempFile;
@@ -90,7 +96,6 @@ function getDockerTemplateList(): array
 
             $info = xmlToCommand($fileToProcess, false);
 
-            // Clean up the temporary file if it was created
             if (isset($tempFile)) {
                 unlink($tempFile);
                 unset($tempFile);
@@ -110,7 +115,6 @@ function getDockerTemplateList(): array
 
             $dockerTemplates[$name] = $command;
         } catch (Throwable $t) {
-            // This will catch any other unexpected errors.
             error_log("Composerize Plugin: Skipped incompatible template {$file}. Error: " . $t->getMessage());
         }
     }
