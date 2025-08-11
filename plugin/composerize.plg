@@ -3,7 +3,7 @@
 <!ENTITY name         "composerize">
 <!ENTITY author       "jstoffel79">
 <!ENTITY version      "2025.08.11"> <!-- This will be updated by the build script -->
-<!ENTITY md5          "1853fd857bf234dcea9a9cf9585e26d3">  <!-- This will be updated by the build script -->
+<!ENTITY md5          "2ee545cac8a287b21862293194848799">  <!-- This will be updated by the build script -->
 <!ENTITY launch       "Settings/Composerize">
 <!ENTITY branch       "main">
 <!ENTITY github       "jstoffel79/unraid-plugin-composerize">
