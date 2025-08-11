@@ -8,7 +8,6 @@ declare(strict_types=1);
  */
 
 // --- Constants ---
-define('DOCKER_TEMPLATE_DIRECTORY', '/boot/config/plugins/dockerMan/templates-user/');
 define('COMPOSE_DIRECTORY', '/boot/config/plugins/compose.manager/projects/');
 
 // --- Dependencies ---
@@ -53,7 +52,7 @@ function installCompose(string $name, string $compose, bool $force): bool
 /**
  * Gets a list of templates for currently running Docker containers.
  * This function queries the Docker client, filters for running containers
- * that have a user template, and then extracts the run command.
+ * that have a template, and then extracts the run command.
  */
 function getDockerTemplateList(): array
 {
@@ -62,9 +61,10 @@ function getDockerTemplateList(): array
     $containers = $dockerClient->getDockerContainers();
     $filesToProcess = [];
 
-    // First, collect all unique template files from running containers
+    // First, collect all unique template files from running containers, regardless of source.
     foreach ($containers as $container) {
-        if ($container['Running'] && isset($container['Template']) && strpos($container['Template'], DOCKER_TEMPLATE_DIRECTORY) === 0) {
+        // Check if the container is running and has a valid template file associated with it.
+        if ($container['Running'] && isset($container['Template']) && file_exists($container['Template'])) {
             if (!in_array($container['Template'], $filesToProcess)) {
                 $filesToProcess[] = $container['Template'];
             }
@@ -72,7 +72,7 @@ function getDockerTemplateList(): array
     }
 
     if (empty($filesToProcess)) {
-        error_log('Composerize Plugin: No running containers with user templates found.');
+        error_log('Composerize Plugin: No running containers with associated template files were found.');
         return [];
     }
 
