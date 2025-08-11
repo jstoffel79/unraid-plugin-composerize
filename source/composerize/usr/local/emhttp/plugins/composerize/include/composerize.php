@@ -10,7 +10,6 @@ define('COMPOSE_DIRECTORY', '/boot/config/plugins/compose.manager/projects/');
 
 // --- Dependencies ---
 require_once '/usr/local/emhttp/plugins/dynamix.docker.manager/include/DockerClient.php';
-// We no longer need Helpers.php because we are parsing the XML manually.
 
 /**
  * Validates a given string to see if it's a non-empty YAML string.
@@ -72,24 +71,37 @@ function buildDockerRunCommand(SimpleXMLElement $xml): ?string
         $command[] = (string)$xml->ExtraParams;
     }
 
-    // Process Ports
-    if (isset($xml->Config) && $xml->Config->attributes()['Type'] == 'Port') {
-        foreach ($xml->Config as $port) {
-            $command[] = '-p ' . escapeshellarg((string)$port->attributes()['HostPort'] . ':' . (string)$port->attributes()['ContainerPort']);
-        }
-    }
+    // Process all Config tags (Ports, Paths, Variables, etc.)
+    if (isset($xml->Config)) {
+        foreach ($xml->Config as $config) {
+            $attributes = $config->attributes();
+            $type = isset($attributes['Type']) ? (string)$attributes['Type'] : '';
 
-    // Process Volumes
-    if (isset($xml->Config) && $xml->Config->attributes()['Type'] == 'Path') {
-         foreach ($xml->Config as $path) {
-            $command[] = '-v ' . escapeshellarg((string)$path->attributes()['HostPath'] . ':' . (string)$path->attributes()['ContainerPath']);
-        }
-    }
-    
-    // Process Environment Variables
-    if (isset($xml->Config) && $xml->Config->attributes()['Type'] == 'Variable') {
-        foreach ($xml->Config as $var) {
-            $command[] = '-e ' . escapeshellarg((string)$var->attributes()['Name'] . '=' . (string)$var->attributes()['Default']);
+            switch ($type) {
+                case 'Port':
+                    $hostPort = (string)$config; // User-set value is the content of the tag
+                    $containerPort = (string)$attributes['Target'];
+                    if (!empty($hostPort) && !empty($containerPort)) {
+                        $command[] = '-p ' . escapeshellarg($hostPort . ':' . $containerPort);
+                    }
+                    break;
+
+                case 'Path':
+                    $hostPath = (string)$config;
+                    $containerPath = (string)$attributes['Target'];
+                    if (!empty($hostPath) && !empty($containerPath)) {
+                        $command[] = '-v ' . escapeshellarg($hostPath . ':' . $containerPath);
+                    }
+                    break;
+                
+                case 'Variable':
+                    $value = (string)$config;
+                    $name = (string)$attributes['Target'];
+                    if (isset($name)) { // Name is the target
+                        $command[] = '-e ' . escapeshellarg($name . '=' . $value);
+                    }
+                    break;
+            }
         }
     }
 
