@@ -5,13 +5,12 @@
 #
 name: Build and Release Unraid Plugin
 
-# This workflow can be triggered in two ways:
-# 1. Manually, by clicking the "Run workflow" button on the Actions tab.
-# 2. Automatically, on every push to the 'main' branch (currently commented out).
+# This workflow is triggered on every push to the 'main' branch.
+# It also allows for manual runs from the Actions tab.
 on:
-  workflow_dispatch: # Allows manual triggering
-  # push:
-  #   branches: [ main ]
+  push:
+    branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   build:
@@ -30,26 +29,19 @@ jobs:
       - name: Make build script executable
         run: chmod +x build.sh
 
-      # Step 4: List files for debugging
-      # This helps confirm that the plugin file exists before the build script is run.
-      - name: List files in workspace
-        run: ls -lR
-
-      # Step 5: Run the build script
-      # This executes the script from the Canvas.
-      # It will create the .txz archive and update the .plg file.
+      # Step 4: Run the build script
+      # This executes the script, creating the .txz archive and updating the .plg file.
       - name: Run build script
         id: build
         run: ./build.sh plugin/composerize.plg
 
-      # Step 6: Commit the updated .plg file back to the repository
-      # This is important so the plugin URL in Unraid has the correct version and MD5 hash.
+      # Step 5: Commit the updated .plg file back to the repository
       - name: Commit updated plugin file
         run: |
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
           git add plugin/composerize.plg
-          # Check if there are any changes to commit
+          # Only commit and push if there are actual changes to the file
           if ! git diff-index --quiet HEAD; then
             git commit -m "ci: Build and update plugin file [skip ci]"
             git push
@@ -57,20 +49,18 @@ jobs:
             echo "No changes to commit."
           fi
       
-      # Step 7: Generate a dynamic tag name based on the current date
+      # Step 6: Generate a dynamic tag name based on the current date
       - name: Generate tag name
         id: tag
         run: echo "tag_name=v$(date +%Y.%m.%d)" >> $GITHUB_OUTPUT
 
-      # Step 8: Create a GitHub Release and upload the build artifacts
-      # This uses a popular action to create a release and attach the files.
+      # Step 7: Create a GitHub Release and upload the build artifacts
       - name: Create Release and Upload Assets
         uses: softprops/action-gh-release@v2
         with:
           # Use the output from the previous step as the tag name
           tag_name: ${{ steps.tag.outputs.tag_name }}
           # The files to attach to the release.
-          # It looks for the .txz file in the 'archive' directory and the updated .plg file.
           files: |
             ./archive/*.txz
             ./plugin/composerize.plg
