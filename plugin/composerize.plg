@@ -3,7 +3,7 @@
 <!ENTITY name         "composerize">
 <!ENTITY author       "jstoffel79">
 <!ENTITY version      "2025.08.11">
-<!ENTITY md5          "c20013f2b0ed2b1efa0d00297024a580">
+<!ENTITY md5          "3ed572ddcc227c185d4ee74455f069cf">
 <!ENTITY launch       "Settings/Composerize">
 <!ENTITY branch       "main">
 <!ENTITY github       "jstoffel79/unraid-plugin-composerize">
