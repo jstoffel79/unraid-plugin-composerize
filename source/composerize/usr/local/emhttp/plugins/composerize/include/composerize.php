@@ -95,21 +95,20 @@ function getDockerTemplateList(): array
                 $xmlContent = file_get_contents($file);
                 if ($xmlContent === false) continue;
 
-                if (strpos($xmlContent, '<Network>') === false) {
+                // Robustly normalize the Network tag to prevent fatal errors in Unraid's helper scripts.
+                // This replaces any existing Network tag (custom, host, etc.) with a simple Bridge default.
+                $xmlContent = preg_replace('/<Network>.*<\/Network>/s', '<Network>Bridge</Network>', $xmlContent, 1, $count);
+                if ($count === 0) {
+                    // If the Network tag was completely missing, add it.
                     $xmlContent = str_replace('</Container>', "  <Network>Bridge</Network>\n</Container>", $xmlContent);
-                    $tempFile = tempnam(sys_get_temp_dir(), 'composerize-');
-                    file_put_contents($tempFile, $xmlContent);
-                    $fileToProcess = $tempFile;
-                } else {
-                    $fileToProcess = $file;
                 }
+                
+                $tempFile = tempnam(sys_get_temp_dir(), 'composerize-');
+                file_put_contents($tempFile, $xmlContent);
+                
+                $info = xmlToCommand($tempFile, false);
 
-                $info = xmlToCommand($fileToProcess, false);
-
-                if (isset($tempFile)) {
-                    unlink($tempFile);
-                    unset($tempFile);
-                }
+                unlink($tempFile);
 
                 if (!is_array($info) || empty($info[0]) || empty($info[1])) {
                     error_log("Composerize Plugin: Skipped template with invalid format after processing: {$file}");
