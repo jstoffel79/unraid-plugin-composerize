@@ -48,7 +48,7 @@ function installCompose(string $name, string $compose, bool $force): bool
 
 /**
  * Manually parses a Docker template XML and builds a 'docker run' command.
- * This bypasses the buggy xmlToCommand() function in Unraid's Helpers.php.
+ * This is more robust than relying on Unraid's internal functions.
  */
 function buildDockerRunCommand(SimpleXMLElement $xml): ?string
 {
@@ -66,6 +66,10 @@ function buildDockerRunCommand(SimpleXMLElement $xml): ?string
     if (isset($xml->Privileged) && strtolower((string)$xml->Privileged) === 'true') {
         $command[] = '--privileged';
     }
+
+    if (isset($xml->Restart)) {
+        $command[] = '--restart=' . escapeshellarg((string)$xml->Restart);
+    }
     
     if (isset($xml->ExtraParams)) {
         $command[] = (string)$xml->ExtraParams;
@@ -76,10 +80,16 @@ function buildDockerRunCommand(SimpleXMLElement $xml): ?string
         foreach ($xml->Config as $config) {
             $attributes = $config->attributes();
             $type = isset($attributes['Type']) ? (string)$attributes['Type'] : '';
+            $value = (string)$config;
+
+            // Use the Default value from the attribute if the main value is empty
+            if ($value === '' && isset($attributes['Default'])) {
+                $value = (string)$attributes['Default'];
+            }
 
             switch ($type) {
                 case 'Port':
-                    $hostPort = (string)$config; // User-set value is the content of the tag
+                    $hostPort = $value;
                     $containerPort = (string)$attributes['Target'];
                     if (!empty($hostPort) && !empty($containerPort)) {
                         $command[] = '-p ' . escapeshellarg($hostPort . ':' . $containerPort);
@@ -87,7 +97,7 @@ function buildDockerRunCommand(SimpleXMLElement $xml): ?string
                     break;
 
                 case 'Path':
-                    $hostPath = (string)$config;
+                    $hostPath = $value;
                     $containerPath = (string)$attributes['Target'];
                     if (!empty($hostPath) && !empty($containerPath)) {
                         $command[] = '-v ' . escapeshellarg($hostPath . ':' . $containerPath);
@@ -95,10 +105,12 @@ function buildDockerRunCommand(SimpleXMLElement $xml): ?string
                     break;
                 
                 case 'Variable':
-                    $value = (string)$config;
                     $name = (string)$attributes['Target'];
-                    if (isset($name)) { // Name is the target
-                        $command[] = '-e ' . escapeshellarg($name . '=' . $value);
+                    if (isset($name)) {
+                        // Only add environment variables that have a value.
+                        if ($value !== '') {
+                            $command[] = '-e ' . escapeshellarg($name . '=' . $value);
+                        }
                     }
                     break;
             }
