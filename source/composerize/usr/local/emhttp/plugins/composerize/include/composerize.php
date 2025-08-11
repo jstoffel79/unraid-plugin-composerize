@@ -25,49 +25,34 @@ function isValidYaml(?string $yamlString): bool
  */
 function installCompose(string $name, string $compose, bool $force): bool
 {
-    error_log("Composerize Trace: Inside installCompose() for stack '{$name}'.");
-    
     $composeProjectDirectory = COMPOSE_DIRECTORY . $name;
     $composeYamlFilePath = $composeProjectDirectory . '/docker-compose.yml';
     $composeNameFilePath = $composeProjectDirectory . '/name';
 
-    error_log("Composerize Trace: Project directory path: {$composeProjectDirectory}");
-
     if (!$force && (file_exists($composeProjectDirectory) || file_exists($composeYamlFilePath))) {
-        error_log("Composerize Trace: Stack '{$name}' already exists and force is false. Aborting.");
         return false;
     }
 
-    if (!is_dir($composeProjectDirectory)) {
-        error_log("Composerize Trace: Directory does not exist. Attempting to create: {$composeProjectDirectory}");
-        if (!@mkdir($composeProjectDirectory, 0755, true)) {
-            $error = error_get_last();
-            throw new Exception("Failed to create project directory. Check permissions for: " . COMPOSE_DIRECTORY . ". OS Error: " . ($error['message'] ?? 'Unknown error'));
-        }
-        error_log("Composerize Trace: Directory created successfully.");
+    if (!is_dir($composeProjectDirectory) && !@mkdir($composeProjectDirectory, 0755, true)) {
+        throw new Exception("Failed to create project directory. Check permissions for: " . COMPOSE_DIRECTORY);
     }
 
-    error_log("Composerize Trace: Attempting to write name file: {$composeNameFilePath}");
     $nameWritten = file_put_contents($composeNameFilePath, $name);
     if ($nameWritten === false) {
-        $error = error_get_last();
-        throw new Exception("Failed to write 'name' file. Check permissions for: {$composeProjectDirectory}. OS Error: " . ($error['message'] ?? 'Unknown error'));
+        throw new Exception("Failed to write 'name' file. Check permissions for: {$composeProjectDirectory}");
     }
-    error_log("Composerize Trace: Name file written successfully.");
 
-    error_log("Composerize Trace: Attempting to write YAML file: {$composeYamlFilePath}");
     $yamlWritten = file_put_contents($composeYamlFilePath, $compose);
     if ($yamlWritten === false) {
-        $error = error_get_last();
-        throw new Exception("Failed to write 'docker-compose.yml' file. Check permissions for: {$composeProjectDirectory}. OS Error: " . ($error['message'] ?? 'Unknown error'));
+        throw new Exception("Failed to write 'docker-compose.yml' file. Check permissions for: {$composeProjectDirectory}");
     }
-    error_log("Composerize Trace: YAML file written successfully.");
 
     return true;
 }
 
 /**
  * Manually parses a Docker template XML and builds a 'docker run' command.
+ * This bypasses the buggy xmlToCommand() function in Unraid's Helpers.php.
  */
 function buildDockerRunCommand(SimpleXMLElement $xml): ?string
 {
@@ -90,12 +75,14 @@ function buildDockerRunCommand(SimpleXMLElement $xml): ?string
         $command[] = (string)$xml->ExtraParams;
     }
 
+    // Process all Config tags (Ports, Paths, Variables, etc.)
     if (isset($xml->Config)) {
         foreach ($xml->Config as $config) {
             $attributes = $config->attributes();
             $type = isset($attributes['Type']) ? (string)$attributes['Type'] : '';
             $value = (string)$config;
 
+            // Use the Default value from the attribute if the main value is empty
             if ($value === '' && isset($attributes['Default'])) {
                 $value = (string)$attributes['Default'];
             }
@@ -143,6 +130,7 @@ function getDockerTemplateList(): array
     $containers = $dockerClient->getDockerContainers();
     $runningContainerNames = [];
 
+    // 1. Get a list of all running container names.
     foreach ($containers as $container) {
         if (!empty($container['Running'])) {
             $runningContainerNames[] = $container['Name'];
@@ -154,6 +142,7 @@ function getDockerTemplateList(): array
         return [];
     }
 
+    // 2. Scan both user and default template directories.
     $userTemplates = glob('/boot/config/plugins/dockerMan/templates-user/*.xml');
     $defaultTemplates = glob('/boot/config/plugins/dockerMan/templates/*.xml');
     $allTemplateFiles = array_merge($userTemplates ?: [], $defaultTemplates ?: []);
@@ -163,6 +152,7 @@ function getDockerTemplateList(): array
         return [];
     }
 
+    // 3. Process each template file and check if it matches a running container.
     foreach ($allTemplateFiles as $file) {
         try {
             $xml = @simplexml_load_file($file);
@@ -173,6 +163,7 @@ function getDockerTemplateList(): array
             $templateName = (string)$xml->Name;
 
             if (in_array($templateName, $runningContainerNames)) {
+                // This template is for a running container, so we process it.
                 $command = buildDockerRunCommand($xml);
                 if ($command) {
                     $dockerTemplates[$templateName] = $command;
