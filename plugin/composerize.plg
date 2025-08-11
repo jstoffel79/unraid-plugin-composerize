@@ -2,33 +2,21 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name         "composerize">
 <!ENTITY author       "jstoffel79">
-<!ENTITY version      "2025.08.11"> <!-- This will be updated by the build script -->
-<!ENTITY md5          "f545a586c51e242213160d64316810a8">  <!-- This will be updated by the build script -->
+<!ENTITY version      "YYYY.MM.DD">
+<!ENTITY md5          "placeholder">
 <!ENTITY launch       "Settings/Composerize">
 <!ENTITY branch       "main">
 <!ENTITY github       "jstoffel79/unraid-plugin-composerize">
 <!ENTITY repo         "https://github.com/&github;">
 <!ENTITY pluginURL    "https://raw.githubusercontent.com/&github;/&branch;/plugin/&name;.plg">
 <!ENTITY file         "&name;-&version;.txz">
-<!-- This URL now correctly points to the GitHub Release assets -->
 <!ENTITY archiveURL   "https://github.com/&github;/releases/download/v&version;/&file;">
 ]>
 
 <PLUGIN name="&name;" author="&author;" version="&version;" launch="&launch;" pluginURL="&pluginURL;" support="&repo;">
 
 <CHANGES>
-### 2025.08.10
-- Fixed download URL to point to GitHub Release assets.
-- Modernized plugin file for Unraid 7+ compatibility.
-- Updated versioning and improved installation/removal scripts.
-- Pointed plugin to jstoffel79 repository.
-
-### 2023.11.01
-- General enhancements and bug fixes
-- Moved composerize to client side.
-
-### 2022.08.01
-- Initial Release
+<!-- The build process will not modify this section -->
 </CHANGES>
 
 <!-- This script cleans up old plugin packages during an upgrade -->
