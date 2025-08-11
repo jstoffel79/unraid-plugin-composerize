@@ -3,9 +3,8 @@ declare(strict_types=1);
 
 /**
  * composerize.php - Helper functions for the Composerize Unraid Plugin.
- * * NOTE: The 'declare(strict_types=1);' statement MUST be the very first
- * line after the opening <?php tag. No comments, blank lines, or even
- * invisible characters (like a BOM) can come before it.
+ * NOTE: The 'declare(strict_types=1);' statement MUST be the very first
+ * line after the opening <?php tag. No comments or blank lines can come before it.
  */
 
 // --- Constants ---
@@ -67,6 +66,7 @@ function getDockerTemplateList(): array
 
     foreach ($files as $file) {
         try {
+            // This function from Helpers.php can fail on malformed templates.
             $info = xmlToCommand($file, false);
 
             if (!is_array($info) || empty($info[0]) || empty($info[1])) {
@@ -82,8 +82,9 @@ function getDockerTemplateList(): array
             $name = $info[1];
 
             $dockerTemplates[$name] = $command;
-        } catch (Exception $e) {
-            error_log("Composerize Plugin: Error processing template {$file}: " . $e->getMessage());
+        } catch (Throwable $t) {
+            // Catch the fatal error from xmlToCommand and log it, then continue.
+            error_log("Composerize Plugin: Skipped incompatible template {$file}. Error: " . $t->getMessage());
         }
     }
 
