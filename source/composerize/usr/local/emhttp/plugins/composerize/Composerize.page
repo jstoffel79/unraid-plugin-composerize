@@ -12,6 +12,7 @@ Menu="Utilities"
 define('PLUGIN_ROOT', '/plugins/composerize');
 define('PLUGIN_API_URL', PLUGIN_ROOT . '/api.php');
 
+
 // Use an absolute path to ensure the file is found correctly within the Unraid GUI.
 require_once '/usr/local/emhttp/plugins/composerize/include/composerize.php';
 
