@@ -1,7 +1,4 @@
 <?php
-// FILE: source/composerize/usr/local/emhttp/plugins/composerize/include/api_helpers.php
-// This is a NEW file.
-declare(strict_types=1);
 
 /**
  * api_helpers.php - Lean helper functions specifically for the API endpoint.
