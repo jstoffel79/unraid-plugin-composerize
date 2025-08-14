@@ -22,7 +22,7 @@ usage() {
     echo "Usage: $SCRIPT_NAME <plugin_file.plg> [branch] [version]"
     echo "  <plugin_file.plg>  : The .plg file for the plugin."
     echo "  [branch]           : (Optional) The git branch to set. Defaults to 'main'."
-    echo "  [version]          : (Optional) The version to set. Defaults to current date (YYYY.MM.DD)."
+    echo "  [version]          : (Optional) The version to set. Defaults to current date and time (YYYY.MM.DD.HHMMSS)."
     exit 1
 }
 
@@ -58,7 +58,7 @@ fi
 
 PLUGIN_FILE="$1"
 BRANCH="${2:-main}"
-VERSION="${3:-$(date +%Y.%m.%d)}" # <-- This line is updated
+VERSION="${3:-$(date +%Y.%m.%d.%H%M%S)}" # <-- This line is updated for unique versions
 
 # Detect OS and set command prefixes for cross-compatibility (macOS vs Linux)
 SED_CMD="sed"
@@ -86,10 +86,8 @@ if [[ -z "$NAME" ]]; then
 fi
 
 # Ensure the plugin file has a placeholder for the md5 hash.
-# Unraid's installer can fail if this entity is missing completely.
 if ! grep -q "<!ENTITY md5" "$PLUGIN_FILE"; then
     log "Warning: The md5 entity was not found. Adding a placeholder to '$PLUGIN_FILE'." "yellow"
-    # Insert a placeholder md5 entity before the version entity for consistency.
     "$SED_CMD" -i.bak '/<!ENTITY version/i\
 <!ENTITY md5         "placeholder">
 ' "$PLUGIN_FILE"
@@ -124,19 +122,15 @@ readonly OUTPUT_FILE="$(realpath "$ARCHIVE_DIR")/$FILE_NAME"
 (
     cd "$PACKAGE_DIR"
     log "\nSetting file permissions..."
-    # Ensure all text files have Unix line endings
     find usr -type f -exec dos2unix {} \;
-    # Set standard permissions for plugin files
     chmod -R 755 usr/
 
     log "Creating archive: $FILE_NAME..."
-    # Create a compressed tarball with root ownership
     "$TAR_CMD" -cJf "$OUTPUT_FILE" --owner=0 --group=0 usr/
 )
 
 log "Verifying package..."
 if [[ -f "$OUTPUT_FILE" ]]; then
-    # Calculate MD5 hash
     hash=$($MD5_CMD "$OUTPUT_FILE" | cut -f 1 -d " ")
 
     if [[ -z "$hash" ]]; then
@@ -147,12 +141,11 @@ if [[ -f "$OUTPUT_FILE" ]]; then
     log "Packaged successfully! MD5: $hash" "green"
 
     log "Updating plugin info file..."
-    # Use sed to update the .plg file in-place with the new info
     "$SED_CMD" -i.bak -e "/<!ENTITY md5/s/\".*\"/\"$hash\"/" \
                        -e "/<!ENTITY version/s/\".*\"/\"$VERSION\"/" \
                        -e "/<!ENTITY branch/s/\".*\"/\"$BRANCH\"/" \
                        "$PLUGIN_FILE"
-    rm "${PLUGIN_FILE}.bak" # Clean up the backup file created by sed
+    rm "${PLUGIN_FILE}.bak"
 else
     log "Error: Failed to build package!" "red"
     exit 1
