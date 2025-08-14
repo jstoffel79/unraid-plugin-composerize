@@ -18,15 +18,24 @@ usage() {
     exit 1
 }
 
+# This function is updated to be more robust with 'set -u'
 log() {
     local color_code=""
+    local color_reset='\033[0m'
+
     case "${2:-}" in
         green)  color_code='\033[0;32m' ;;
         red)    color_code='\033[0;31m' ;;
         yellow) color_code='\033[0;33m' ;;
         blue)   color_code='\033[0;34m' ;;
     esac
-    printf "${color_code}%s${color_reset}\n" "$1"
+
+    # This explicit check prevents the 'unbound variable' error.
+    if [[ -n "$color_code" ]]; then
+        printf "${color_code}%s${color_reset}\n" "$1"
+    else
+        printf "%s\n" "$1"
+    fi
 }
 
 # --- Main Script ---
