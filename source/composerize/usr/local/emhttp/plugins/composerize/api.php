@@ -18,5 +18,5 @@ function send_json_response(int $statusCode, array $data): void {
 // Immediately send a success response to confirm the script is running.
 send_json_response(200, [
     'success' => true,
-    'message' => 'Success! This is a test response from the simplified api.php file.',
+    'message' => 'Success12! This is a test response from the simplified api.php file.',
 ]);
