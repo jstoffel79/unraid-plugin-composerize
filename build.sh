@@ -92,7 +92,7 @@ readonly OUTPUT_FILE="$(realpath "$ARCHIVE_DIR")/$FILE_NAME"
     log "\nSetting file permissions..."
     # Ensure all text files have Unix line endings
     find usr -type f -exec dos2unix {} \;
-    # Set correct permissions for directories and files
+    # Set correct permissions: 755 for directories, 644 for files
     find usr -type d -exec chmod 755 {} \;
     find usr -type f -exec chmod 644 {} \;
 
