@@ -1,57 +1,15 @@
 <?php
 
 /**
- * composerize.php - Helper functions for the Composerize Unraid Plugin.
+ * composerize.php - Helper functions for the Composerize Unraid Plugin UI page.
  */
-
-// --- Constants ---
-define('COMPOSE_DIRECTORY', '/boot/config/plugins/compose.manager/projects/');
 
 // --- Dependencies ---
 require_once '/usr/local/emhttp/plugins/dynamix.docker.manager/include/DockerClient.php';
-// We no longer need Helpers.php because we are parsing the XML manually.
-
-/**
- * Validates a given string to see if it's a non-empty YAML string.
- */
-function isValidYaml(?string $yamlString): bool
-{
-    return !empty($yamlString);
-}
-
-/**
- * Installs a Docker Compose stack to the disk.
- */
-function installCompose(string $name, string $compose, bool $force): bool
-{
-    $composeProjectDirectory = COMPOSE_DIRECTORY . $name;
-    $composeYamlFilePath = $composeProjectDirectory . '/docker-compose.yml';
-    $composeNameFilePath = $composeProjectDirectory . '/name';
-
-    if (!$force && (file_exists($composeProjectDirectory) || file_exists($composeYamlFilePath))) {
-        return false;
-    }
-
-    if (!is_dir($composeProjectDirectory) && !@mkdir($composeProjectDirectory, 0755, true)) {
-        throw new Exception("Failed to create project directory. Check permissions for: " . COMPOSE_DIRECTORY);
-    }
-
-    $nameWritten = file_put_contents($composeNameFilePath, $name);
-    if ($nameWritten === false) {
-        throw new Exception("Failed to write 'name' file. Check permissions for: {$composeProjectDirectory}");
-    }
-
-    $yamlWritten = file_put_contents($composeYamlFilePath, $compose);
-    if ($yamlWritten === false) {
-        throw new Exception("Failed to write 'docker-compose.yml' file. Check permissions for: {$composeProjectDirectory}");
-    }
-
-    return true;
-}
+require_once '/usr/local/emhttp/plugins/dynamix.docker.manager/include/Helpers.php';
 
 /**
  * Manually parses a Docker template XML and builds a 'docker run' command.
- * This bypasses the buggy xmlToCommand() function in Unraid's Helpers.php.
  */
 function buildDockerRunCommand(SimpleXMLElement $xml): ?string
 {
@@ -74,14 +32,12 @@ function buildDockerRunCommand(SimpleXMLElement $xml): ?string
         $command[] = (string)$xml->ExtraParams;
     }
 
-    // Process all Config tags (Ports, Paths, Variables, etc.)
     if (isset($xml->Config)) {
         foreach ($xml->Config as $config) {
             $attributes = $config->attributes();
             $type = isset($attributes['Type']) ? (string)$attributes['Type'] : '';
             $value = (string)$config;
 
-            // Use the Default value from the attribute if the main value is empty
             if ($value === '' && isset($attributes['Default'])) {
                 $value = (string)$attributes['Default'];
             }
@@ -129,7 +85,6 @@ function getDockerTemplateList(): array
     $containers = $dockerClient->getDockerContainers();
     $runningContainerNames = [];
 
-    // 1. Get a list of all running container names.
     foreach ($containers as $container) {
         if (!empty($container['Running'])) {
             $runningContainerNames[] = $container['Name'];
@@ -141,7 +96,6 @@ function getDockerTemplateList(): array
         return [];
     }
 
-    // 2. Scan both user and default template directories.
     $userTemplates = glob('/boot/config/plugins/dockerMan/templates-user/*.xml');
     $defaultTemplates = glob('/boot/config/plugins/dockerMan/templates/*.xml');
     $allTemplateFiles = array_merge($userTemplates ?: [], $defaultTemplates ?: []);
@@ -151,7 +105,6 @@ function getDockerTemplateList(): array
         return [];
     }
 
-    // 3. Process each template file and check if it matches a running container.
     foreach ($allTemplateFiles as $file) {
         try {
             $xml = @simplexml_load_file($file);
@@ -162,7 +115,6 @@ function getDockerTemplateList(): array
             $templateName = (string)$xml->Name;
 
             if (in_array($templateName, $runningContainerNames)) {
-                // This template is for a running container, so we process it.
                 $command = buildDockerRunCommand($xml);
                 if ($command) {
                     $dockerTemplates[$templateName] = $command;
