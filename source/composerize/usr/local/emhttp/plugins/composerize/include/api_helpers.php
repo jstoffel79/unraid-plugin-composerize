@@ -1,6 +1,4 @@
 <?php
-declare(strict_types=1);
-
 /**
  * api_helpers.php - Lean helper functions specifically for the API endpoint.
  */
