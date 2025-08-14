@@ -1,9 +1,4 @@
 <?php
-// --- DEBUGGING: Force PHP to display fatal errors ---
-ini_set('display_errors', '1');
-ini_set('display_startup_errors', '1');
-error_reporting(E_ALL);
-// --- END DEBUGGING ---
 
 /**
  * Installs a Docker Compose stack on Unraid.
@@ -20,7 +15,7 @@ function send_json_response(int $statusCode, array $data): void {
     exit;
 }
 
-// Use the lean helper file that doesn't load problematic dependencies.
+// Use the new, lean helper file that doesn't load problematic dependencies.
 require_once PLUGIN_ROOT . '/include/api_helpers.php';
 
 // --- Main Execution ---
