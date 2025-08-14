@@ -1,5 +1,4 @@
 <?php
-declare(strict_types=1);
 
 /**
  * composerize.php - Helper functions for the Composerize Unraid Plugin.
