@@ -26,7 +26,7 @@ log() {
         yellow) color_code='\033[0;33m' ;;
         blue)   color_code='\033[0;34m' ;;
     esac
-    printf "${color_code}%s\033[0m\n" "$1"
+    printf "${color_code}%s${color_reset}\n" "$1"
 }
 
 # --- Main Script ---
@@ -92,9 +92,10 @@ readonly OUTPUT_FILE="$(realpath "$ARCHIVE_DIR")/$FILE_NAME"
     log "\nSetting file permissions..."
     # Ensure all text files have Unix line endings
     find usr -type f -exec dos2unix {} \;
-    # Set correct permissions: 755 for directories, 644 for files
+    # Set correct permissions: 755 for directories and PHP scripts, 644 for other files
     find usr -type d -exec chmod 755 {} \;
-    find usr -type f -exec chmod 644 {} \;
+    find usr -type f ! -name "*.php" -exec chmod 644 {} \;
+    find usr -type f -name "*.php" -exec chmod 755 {} \;
 
     log "Creating archive: $FILE_NAME..."
     "$TAR_CMD" -cJf "$OUTPUT_FILE" --owner=0 --group=0 usr/
