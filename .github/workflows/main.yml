@@ -53,10 +53,10 @@ jobs:
             echo "No changes to commit."
           fi
       
-      # Step 6: Generate a dynamic tag name based on the current date
+      # Step 6: Generate a dynamic tag name based on the current date and time
       - name: Generate tag name
         id: tag
-        run: echo "tag_name=v$(date +%Y.%m.%d)" >> $GITHUB_OUTPUT
+        run: echo "tag_name=v$(date +%Y.%m.%d.%H%M%S)" >> $GITHUB_OUTPUT
 
       # Step 7: Create a GitHub Release and upload the build artifacts
       - name: Create Release and Upload Assets
