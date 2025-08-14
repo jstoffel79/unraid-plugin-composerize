@@ -1,6 +1,4 @@
 <?php
-declare(strict_types=1);
-
 /**
  * Installs a Docker Compose stack on Unraid.
  * This script handles a POST request to create and install a new stack.
