@@ -11,8 +11,7 @@ Menu="Utilities"
  */
 
 define('PLUGIN_ROOT', '/plugins/composerize');
-// UPDATED: Point to the new .page file for the API
-define('PLUGIN_API_URL', PLUGIN_ROOT . '/api.page'); 
+define('PLUGIN_API_URL', PLUGIN_ROOT . '/api.php');
 
 require_once '/usr/local/emhttp/plugins/composerize/include/composerize.php';
 
@@ -30,12 +29,9 @@ require_once '/usr/local/emhttp/plugins/composerize/include/composerize.php';
             --border-color: #718096;
             --text-color: #e2e8f0;
             --accent-color: #38a169;
-            --error-color: #c53030;
-            --font-family: 'Inter', sans-serif;
-            --monospace-font: 'Fira Code', 'Cascadia Code', monospace;
         }
         body {
-            font-family: var(--font-family);
+            font-family: 'Inter', sans-serif;
             background-color: var(--primary-bg);
             color: var(--text-color);
             margin: 0;
@@ -52,13 +48,11 @@ require_once '/usr/local/emhttp/plugins/composerize/include/composerize.php';
             background-color: var(--secondary-bg);
             border-radius: 0.5rem;
             padding: 1.5rem;
-            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
         }
         h2 {
             margin-top: 0;
             border-bottom: 1px solid var(--border-color);
             padding-bottom: 0.5rem;
-            font-weight: 600;
         }
         select, textarea, button {
             width: 100%;
@@ -68,15 +62,9 @@ require_once '/usr/local/emhttp/plugins/composerize/include/composerize.php';
             background-color: var(--primary-bg);
             color: var(--text-color);
             font-size: 1rem;
-            transition: all 0.2s ease-in-out;
-        }
-        select:focus, textarea:focus, button:focus {
-            outline: none;
-            border-color: var(--accent-color);
-            box-shadow: 0 0 0 3px rgba(56, 161, 105, 0.4);
         }
         textarea {
-            font-family: var(--monospace-font);
+            font-family: 'Fira Code', 'Cascadia Code', monospace;
             min-height: 400px;
             resize: vertical;
         }
@@ -97,21 +85,6 @@ require_once '/usr/local/emhttp/plugins/composerize/include/composerize.php';
         #submit-button { background-color: var(--accent-color); }
         #undo-button { background-color: #d69e2e; }
         #reset-button { background-color: #9b2c2c; }
-        .modal-overlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0, 0, 0, 0.6); display: flex;
-            align-items: center; justify-content: center; z-index: 1000;
-            opacity: 0; transition: opacity 0.3s ease; pointer-events: none;
-        }
-        .modal-overlay.visible { opacity: 1; pointer-events: auto; }
-        .modal-content {
-            background: var(--secondary-bg); padding: 2rem; border-radius: 0.5rem;
-            text-align: center; max-width: 400px; transform: scale(0.9);
-            transition: transform 0.3s ease;
-        }
-        .modal-overlay.visible .modal-content { transform: scale(1); }
-        .modal-buttons { margin-top: 1.5rem; display: flex; gap: 1rem; justify-content: center; }
-        .modal-buttons button { width: auto; padding: 0.5rem 1.5rem; }
     </style>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -130,21 +103,21 @@ require_once '/usr/local/emhttp/plugins/composerize/include/composerize.php';
     </div>
     <div class="panel">
         <h2>Compose Preview</h2>
-        <textarea id="compose-text" spellcheck="false" placeholder="Select a template to see the Docker Compose preview..."></textarea>
-        <div class="button-group">
-            <button id="submit-button" disabled>Apply</button>
-            <button id="undo-button" disabled>Revert Changes</button>
-            <button id="reset-button">Reset</button>
-        </div>
+        <!-- The form now submits to Unraid's script handler -->
+        <form id="compose-form" method="post" onsubmit="return handleApply();">
+            <textarea id="compose-text" name="compose" spellcheck="false" placeholder="Select a template to see the Docker Compose preview..."></textarea>
+            <input type="hidden" id="stack-name" name="name" value="">
+            <input type="hidden" id="force-overwrite" name="force" value="false">
+            
+            <div class="button-group">
+                <button type="submit" id="submit-button" disabled>Apply</button>
+                <button type="button" id="undo-button" disabled>Revert Changes</button>
+                <button type="button" id="reset-button">Reset</button>
+            </div>
+        </form>
     </div>
 </div>
-<div id="notification-modal" class="modal-overlay">
-    <div class="modal-content">
-        <h3 id="modal-title"></h3>
-        <p id="modal-text"></p>
-        <div id="modal-buttons" class="modal-buttons"></div>
-    </div>
-</div>
+
 <script src="<?= htmlspecialchars(PLUGIN_ROOT); ?>/js/composerize.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
@@ -153,59 +126,38 @@ document.addEventListener('DOMContentLoaded', () => {
     const submitButton = document.getElementById('submit-button');
     const undoButton = document.getElementById('undo-button');
     const resetButton = document.getElementById('reset-button');
+    const stackNameInput = document.getElementById('stack-name');
+    const form = document.getElementById('compose-form');
     let originalCompose = '';
 
-    const showNotification = (title, text, buttons = [{ label: 'OK', action: hideNotification }]) => {
-        document.getElementById('modal-title').textContent = title;
-        document.getElementById('modal-text').textContent = text;
-        const modalButtons = document.getElementById('modal-buttons');
-        modalButtons.innerHTML = '';
-        buttons.forEach(btnInfo => {
-            const button = document.createElement('button');
-            button.textContent = btnInfo.label;
-            button.onclick = btnInfo.action;
-            if (btnInfo.class) button.className = btnInfo.class;
-            modalButtons.appendChild(button);
-        });
-        document.getElementById('notification-modal').classList.add('visible');
-    };
-
-    const hideNotification = () => {
-        document.getElementById('notification-modal').classList.remove('visible');
-    };
-
-    const makeApiRequest = async (name, compose, force = false) => {
-        try {
-            const formData = new FormData();
-            formData.append('name', name);
-            formData.append('compose', compose);
-            formData.append('force', String(force));
-
-            const response = await fetch('<?= htmlspecialchars(PLUGIN_API_URL); ?>', {
-                method: 'POST',
-                body: formData
-            });
-
-            const result = await response.json();
-
-            if (response.ok) {
-                showNotification('Success!', result.message);
-            } else if (response.status === 409) {
-                showNotification('Stack Exists', result.error, [
-                    { label: 'Cancel', action: hideNotification },
-                    { label: 'Overwrite', class: 'error', action: () => {
-                        hideNotification();
-                        makeApiRequest(name, compose, true);
-                    }}
-                ]);
-            } else {
-                showNotification('Error!', result.error || 'An unknown error occurred.');
-            }
-        } catch (error) {
-            console.error('API Request Failed:', error);
-            showNotification('Network Error', 'Could not connect to the server.');
+    function handleApply() {
+        const name = stackNameInput.value;
+        const compose = composeText.value;
+        if (!name || !compose) {
+            alert('Please select a template and ensure the compose preview is not empty.');
+            return false; // Prevent form submission
         }
-    };
+        
+        // Use Unraid's built-in openBox function to show the script output in a modal
+        openBox("<?= htmlspecialchars(PLUGIN_API_URL); ?>", "Installing Stack", 600, 800, true);
+        
+        // We need to manually submit the form data via a hidden iframe
+        // because openBox does not handle POST data.
+        const iframe = document.createElement('iframe');
+        iframe.name = 'hidden-form-target';
+        iframe.style.display = 'none';
+        document.body.appendChild(iframe);
+        
+        form.target = 'hidden-form-target';
+        form.action = "<?= htmlspecialchars(PLUGIN_API_URL); ?>";
+        form.submit();
+
+        // Prevent the main page from navigating
+        return false;
+    }
+    
+    // Attach the handler to the form's onsubmit event
+    form.onsubmit = handleApply;
 
     templateSelect.addEventListener('change', () => {
         const selectedOption = templateSelect.options[templateSelect.selectedIndex];
@@ -213,11 +165,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (command) {
             originalCompose = composerize(command);
             composeText.value = originalCompose;
+            stackNameInput.value = selectedOption.text;
             submitButton.disabled = false;
             undoButton.disabled = false;
         } else {
             originalCompose = '';
             composeText.value = '';
+            stackNameInput.value = '';
             submitButton.disabled = true;
             undoButton.disabled = true;
         }
@@ -229,18 +183,7 @@ document.addEventListener('DOMContentLoaded', () => {
         templateSelect.selectedIndex = 0;
         templateSelect.dispatchEvent(new Event('change'));
     });
-
-    submitButton.addEventListener('click', () => {
-        const name = templateSelect.options[templateSelect.selectedIndex].text;
-        const compose = composeText.value;
-        if (!name || !compose) {
-            showNotification('Invalid Input', 'Please select a template and ensure the compose preview is not empty.');
-            return;
-        }
-        makeApiRequest(name, compose);
-    });
 });
 </script>
-<div class="dwttm-footer-content" style="display: none;"></div>
 </body>
 </html>
