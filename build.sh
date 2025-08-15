@@ -18,7 +18,6 @@ usage() {
     exit 1
 }
 
-# This function is updated to be more robust with 'set -u'
 log() {
     local color_code=""
     local color_reset='\033[0m'
@@ -30,7 +29,6 @@ log() {
         blue)   color_code='\033[0;34m' ;;
     esac
 
-    # This explicit check prevents the 'unbound variable' error.
     if [[ -n "$color_code" ]]; then
         printf "${color_code}%s${color_reset}\n" "$1"
     else
@@ -99,11 +97,11 @@ readonly OUTPUT_FILE="$(realpath "$ARCHIVE_DIR")/$FILE_NAME"
 (
     cd "$PACKAGE_DIR"
     log "\nSetting file permissions..."
-    # Ensure all text files have Unix line endings
     find usr -type f -exec dos2unix {} \;
-    # DEBUGGING: Set all files and directories to be executable to rule out permissions issues.
+    # Set correct permissions: 755 for directories and executable scripts, 644 for other files.
     find usr -type d -exec chmod 755 {} \;
-    find usr -type f -exec chmod 755 {} \;
+    find usr -type f ! -name "*.php" ! -name "*.page" -exec chmod 644 {} \;
+    find usr -type f \( -name "*.php" -o -name "*.page" \) -exec chmod 755 {} \;
 
     log "Creating archive: $FILE_NAME..."
     "$TAR_CMD" -cJf "$OUTPUT_FILE" --owner=0 --group=0 usr/
