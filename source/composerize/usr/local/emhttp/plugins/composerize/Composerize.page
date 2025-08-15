@@ -5,15 +5,16 @@ Type="xmenu"
 Menu="Utilities"
 ---
 <?php
+declare(strict_types=1);
+
 /**
  * Composerize Plugin UI for Unraid 7.
  */
 
 define('PLUGIN_ROOT', '/plugins/composerize');
-define('PLUGIN_API_URL', PLUGIN_ROOT . '/api.php');
+// UPDATED: Point to the new .page file for the API
+define('PLUGIN_API_URL', PLUGIN_ROOT . '/api.page'); 
 
-
-// Use an absolute path to ensure the file is found correctly within the Unraid GUI.
 require_once '/usr/local/emhttp/plugins/composerize/include/composerize.php';
 
 ?>
@@ -123,8 +124,8 @@ require_once '/usr/local/emhttp/plugins/composerize/include/composerize.php';
         <h2>Select a Template</h2>
         <select id="template-select">
             <option value="" selected>Choose a template...</option>
-            <?php foreach (getDockerTemplateList() as $name => $xmlPath): ?>
-                <option value="<?= htmlspecialchars($xmlPath); ?>"><?= htmlspecialchars($name); ?></option>
+            <?php foreach (getDockerTemplateList() as $name => $command): ?>
+                <option value="<?= htmlspecialchars($command); ?>"><?= htmlspecialchars($name); ?></option>
             <?php endforeach; ?>
         </select>
     </div>
@@ -209,9 +210,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     templateSelect.addEventListener('change', () => {
         const selectedOption = templateSelect.options[templateSelect.selectedIndex];
-        const templatePath = selectedOption.value;
-        if (templatePath) {
-            originalCompose = composerize(templatePath);
+        const command = selectedOption.value;
+        if (command) {
+            originalCompose = composerize(command);
             composeText.value = originalCompose;
             submitButton.disabled = false;
             undoButton.disabled = false;
@@ -241,9 +242,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 </script>
-<!--
-  Workaround for a JavaScript error caused by the 'Dynamix Web TTYd Manager' plugin.
--->
 <div class="dwttm-footer-content" style="display: none;"></div>
 </body>
 </html>
