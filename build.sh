@@ -100,8 +100,8 @@ readonly OUTPUT_FILE="$(realpath "$ARCHIVE_DIR")/$FILE_NAME"
     find usr -type f -exec dos2unix {} \;
     # Set correct permissions: 755 for directories and executable scripts, 644 for other files.
     find usr -type d -exec chmod 755 {} \;
-    find usr -type f ! -name "*.php" ! -name "*.page" -exec chmod 644 {} \;
-    find usr -type f \( -name "*.php" -o -name "*.page" \) -exec chmod 755 {} \;
+    find usr -type f ! -name "*.php" ! -name "*.page" ! -name "*.sh" -exec chmod 644 {} \;
+    find usr -type f \( -name "*.php" -o -name "*.page" -o -name "*.sh" \) -exec chmod 755 {} \;
 
     log "Creating archive: $FILE_NAME..."
     "$TAR_CMD" -cJf "$OUTPUT_FILE" --owner=0 --group=0 usr/
