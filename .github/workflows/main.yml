@@ -39,7 +39,6 @@ jobs:
         run: chmod +x build.sh
 
       # Step 5: Run the build script, passing in the generated version
-      # This ensures the .plg file has the exact same version as the release tag.
       - name: Run build script
         id: build
         run: ./build.sh plugin/composerize.plg main ${{ steps.version.outputs.version }}
@@ -53,6 +52,8 @@ jobs:
           # Only commit and push if there are actual changes to the file
           if ! git diff-index --quiet HEAD; then
             git commit -m "ci: Build and update plugin file [skip ci]"
+            # Pull the latest changes from the remote before pushing to avoid conflicts.
+            git pull --rebase
             git push
           else
             echo "No changes to commit."
