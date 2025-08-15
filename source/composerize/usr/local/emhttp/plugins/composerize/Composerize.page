@@ -5,7 +5,6 @@ Type="xmenu"
 Menu="Utilities"
 ---
 <?php
-declare(strict_types=1);
 
 /**
  * Composerize Plugin UI for Unraid 7.
