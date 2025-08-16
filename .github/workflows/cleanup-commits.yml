@@ -96,7 +96,7 @@ jobs:
         echo "# git push origin ${{ steps.branch.outputs.current_branch }} --force"
         
         # UNCOMMENT THESE LINES ONLY AFTER TESTING:
-        # git checkout cleaned-history
-        # git branch -D ${{ steps.branch.outputs.current_branch }}
-        # git checkout -b ${{ steps.branch.outputs.current_branch }}
-        # git push origin ${{ steps.branch.outputs.current_branch }} --force
+        git checkout cleaned-history
+        git branch -D ${{ steps.branch.outputs.current_branch }}
+        git checkout -b ${{ steps.branch.outputs.current_branch }}
+        git push origin ${{ steps.branch.outputs.current_branch }} --force
