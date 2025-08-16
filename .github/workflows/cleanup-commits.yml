@@ -2,6 +2,7 @@ name: Clean Up Old Commits
 
 on:
   workflow_dispatch:  # Manual trigger only for safety
+
   # Uncomment below if you want it to run on a schedule
   # schedule:
   #   - cron: '0 2 * * 0'  # Weekly on Sundays at 2 AM
