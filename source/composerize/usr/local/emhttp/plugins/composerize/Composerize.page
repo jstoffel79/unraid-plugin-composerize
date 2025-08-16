@@ -11,8 +11,8 @@ Menu="Utilities"
 
 define('PLUGIN_ROOT', '/plugins/composerize');
 define('PLUGIN_API_URL', PLUGIN_ROOT . '/api.php');
-// Corrected the path using a reliable constant to prevent pathing errors.
-require_once '/usr/local/emhttp' . PLUGIN_ROOT . '/include/composerize.php';
+// Corrected the path to point to the 'include' directory as per the project structure.
+require_once __DIR__ . '/include/composerize.php';
 ?>
 <!DOCTYPE html>
 <html lang="en">
