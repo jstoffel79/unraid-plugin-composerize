@@ -76,3 +76,4 @@ try {
 } catch (Exception $e) {
     echo "An error occurred: " . htmlspecialchars($e->getMessage());
 }
+
