@@ -114,6 +114,32 @@ select, textarea, button {
     background: #b8021a;
 }
 
+#remove-container-button {
+    background: #ff6b35;
+    color: white;
+}
+
+#remove-container-button:hover:not(:disabled) {
+    background: #e55a2b;
+}
+
+#remove-container-button:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+}
+
+.form-options {
+    background: rgba(var(--accent-bg), 0.15);
+    border: 1px solid rgba(var(--accent-bg), 0.3);
+    border-radius: 3px;
+    padding: 15px;
+}
+
+.form-options label {
+    cursor: pointer;
+    user-select: none;
+}
+
 #status-message {
     padding: 10px;
     margin: 10px 0;
@@ -159,8 +185,20 @@ select, textarea, button {
             
             <div id="status-message"></div>
             
+            <div class="form-options" style="margin: 15px 0;">
+                <label style="display: block; margin-bottom: 10px;">
+                    <input type="checkbox" id="auto-remove" style="margin-right: 8px;">
+                    Automatically remove existing Docker container when applying stack
+                </label>
+                <label style="display: block;">
+                    <input type="checkbox" id="force-install" style="margin-right: 8px;">
+                    Force overwrite existing compose stack
+                </label>
+            </div>
+            
             <div class="button-group">
                 <button type="submit" id="submit-button" disabled>Apply Stack</button>
+                <button type="button" id="remove-container-button" disabled>Remove Container Only</button>
                 <button type="button" id="undo-button" disabled>Revert Changes</button>
                 <button type="button" id="reset-button">Reset</button>
             </div>
@@ -179,12 +217,16 @@ $(function() {
     }
 
     var originalCompose = '';
+    var currentContainerName = '';
     var $templateSelect = $('#template-select');
     var $composeText = $('#compose-text');
     var $submitButton = $('#submit-button');
+    var $removeContainerButton = $('#remove-container-button');
     var $undoButton = $('#undo-button');
     var $resetButton = $('#reset-button');
     var $stackNameInput = $('#stack-name');
+    var $autoRemove = $('#auto-remove');
+    var $forceInstall = $('#force-install');
     var $form = $('#compose-form');
     var $statusMessage = $('#status-message');
 
@@ -206,43 +248,119 @@ $(function() {
             return;
         }
 
-        $submitButton.prop('disabled', true).text('Applying...');
+        $submitButton.prop('disabled', true).text('Processing...');
+
+        // Function to install the stack
+        function installStack() {
+            $.ajax({
+                url: "<?= htmlspecialchars(PLUGIN_API_URL); ?>",
+                method: 'POST',
+                data: {
+                    name: name,
+                    compose: compose,
+                    force: $forceInstall.is(':checked') ? 'true' : 'false'
+                },
+                timeout: 30000
+            })
+            .done(function(data) {
+                showStatus(data, 'success');
+                // Refresh the page to update the template list
+                setTimeout(function() {
+                    location.reload();
+                }, 2000);
+            })
+            .fail(function(xhr) {
+                var errorMsg = xhr.responseText || 'Unknown error occurred';
+                console.error('Error applying compose stack:', errorMsg);
+                showStatus('Error: ' + errorMsg, 'error');
+            })
+            .always(function() {
+                $submitButton.prop('disabled', false).text('Apply Stack');
+            });
+        }
+
+        // Check if we should remove the container first
+        if ($autoRemove.is(':checked') && currentContainerName) {
+            $submitButton.text('Removing Container...');
+            
+            $.ajax({
+                url: "<?= htmlspecialchars(PLUGIN_ROOT); ?>/remove_container.php",
+                method: 'POST',
+                data: {
+                    container_name: currentContainerName
+                },
+                timeout: 30000
+            })
+            .done(function(data) {
+                showStatus('Container removed: ' + data, 'success');
+                // Wait a moment then install the stack
+                setTimeout(installStack, 1000);
+            })
+            .fail(function(xhr) {
+                var errorMsg = xhr.responseText || 'Failed to remove container';
+                console.error('Error removing container:', errorMsg);
+                showStatus('Error removing container: ' + errorMsg, 'error');
+                $submitButton.prop('disabled', false).text('Apply Stack');
+            });
+        } else {
+            // Just install the stack
+            installStack();
+        }
+    }
+
+    function removeContainerOnly() {
+        if (!currentContainerName) {
+            showStatus('No container selected.', 'error');
+            return;
+        }
+
+        if (!confirm('Are you sure you want to remove the container "' + currentContainerName + '"? This cannot be undone.')) {
+            return;
+        }
+
+        $removeContainerButton.prop('disabled', true).text('Removing...');
 
         $.ajax({
-            url: "<?= htmlspecialchars(PLUGIN_API_URL); ?>",
+            url: "<?= htmlspecialchars(PLUGIN_ROOT); ?>/remove_container.php",
             method: 'POST',
             data: {
-                name: name,
-                compose: compose,
-                force: 'false'
+                container_name: currentContainerName
             },
             timeout: 30000
         })
         .done(function(data) {
-            showStatus(data, 'success');
+            showStatus('Container removed: ' + data, 'success');
+            // Refresh the page to update the template list
+            setTimeout(function() {
+                location.reload();
+            }, 2000);
         })
         .fail(function(xhr) {
             var errorMsg = xhr.responseText || 'Unknown error occurred';
-            console.error('Error applying compose stack:', errorMsg);
+            console.error('Error removing container:', errorMsg);
             showStatus('Error: ' + errorMsg, 'error');
         })
         .always(function() {
-            $submitButton.prop('disabled', false).text('Apply Stack');
+            $removeContainerButton.prop('disabled', false).text('Remove Container Only');
         });
     }
 
     $form.on('submit', handleApply);
+    $removeContainerButton.on('click', removeContainerOnly);
 
     $templateSelect.on('change', function() {
         var selectedOption = this.options[this.selectedIndex];
         var command = selectedOption.value;
         
         if (command) {
+            currentContainerName = selectedOption.text;
+            
             try {
                 originalCompose = composerize(command);
                 $composeText.val(originalCompose);
                 $stackNameInput.val(selectedOption.text);
                 $submitButton.prop('disabled', false);
+                $removeContainerButton.prop('disabled', false);
                 $undoButton.prop('disabled', false);
                 $statusMessage.hide();
             } catch (e) {
@@ -251,13 +369,16 @@ $(function() {
                 originalCompose = '';
                 $composeText.val('Could not parse the docker run command for this template.\n\n' + command);
                 $submitButton.prop('disabled', true);
+                $removeContainerButton.prop('disabled', true);
                 $undoButton.prop('disabled', true);
             }
         } else {
+            currentContainerName = '';
             originalCompose = '';
             $composeText.val('');
             $stackNameInput.val('');
             $submitButton.prop('disabled', true);
+            $removeContainerButton.prop('disabled', true);
             $undoButton.prop('disabled', true);
             $statusMessage.hide();
         }
