@@ -368,10 +368,10 @@ $(function() {
         let commandToParse = dockerRun;
 
         // --- Sanitize command for better parsing ---
-        // 1. Normalize --flag='value' to --flag "value"
-        commandToParse = commandToParse.replace(/(-{1,2}[a-zA-Z0-9-]+)='([^']*)'/g, '$1 "$2"');
-        // 2. Normalize -e 'KEY=VALUE' to -e "KEY=VALUE" for complex env vars
-        commandToParse = commandToParse.replace(/-e '([^']*)'/g, '-e "$1"');
+        // 1. Normalize all forms of --flag='value' or -f='value' to --flag "value"
+        commandToParse = commandToParse.replace(/(-{1,2}[a-zA-Z0-9\.-]+)='([^']*)'/g, '$1 "$2"');
+        // 2. Unquote the image name if it's at the very end of the command
+        commandToParse = commandToParse.replace(/ '([^' ]*)'$/, ' $1');
 
         const hasNoHealthcheck = commandToParse.includes('--no-healthcheck');
         if (hasNoHealthcheck) {
@@ -433,6 +433,18 @@ $(function() {
             };
         }
         
+        // Handle environment variables that might be arrays (e.g., from -e VAR)
+        if (service.environment && Array.isArray(service.environment)) {
+            const envObj = {};
+            service.environment.forEach(env => {
+                const parts = env.split('=');
+                const key = parts[0];
+                const value = parts.length > 1 ? parts.slice(1).join('=') : '';
+                envObj[key] = value;
+            });
+            service.environment = envObj;
+        }
+        
         delete composeObj.version;
 
         return objectToYaml(composeObj);
@@ -456,14 +468,15 @@ $(function() {
                 if (Array.isArray(value)) {
                     yaml += `${spaces}${key}:\n`;
                     value.forEach(item => {
-                        yaml += `${spaces}  - "${item}"\n`;
+                        yaml += `${spaces}  - "${String(item).replace(/"/g, '\\"')}"\n`;
                     });
                 } else if (typeof value === 'object') {
                     yaml += `${spaces}${key}:\n`;
                     yaml += objectToYaml(value, indent + 1);
                 } else {
-                    const needsQuotes = /[:\s]/.test(String(value)) || /^\d+$/.test(String(value)) || /^(true|false|yes|no)$/i.test(String(value));
-                    const formattedValue = needsQuotes ? `'${value}'` : value;
+                    const stringValue = String(value);
+                    const needsQuotes = /[:\s!@#$%^&*()\[\]{}\\/|]/.test(stringValue) || /^\d+$/.test(stringValue) || /^(true|false|yes|no|null)$/i.test(stringValue);
+                    const formattedValue = needsQuotes ? `'${stringValue.replace(/'/g, "''")}'` : stringValue;
                     yaml += `${spaces}${key}: ${formattedValue}\n`;
                 }
             }
