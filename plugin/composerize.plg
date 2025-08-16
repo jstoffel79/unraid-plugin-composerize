@@ -2,8 +2,8 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name         "composerize">
 <!ENTITY author       "jstoffel79">
-<!ENTITY version      "2025.08.16.043455">
-<!ENTITY md5          "b441ad508669181727a1f86e17d45569">
+<!ENTITY version      "2025.08.16.044623">
+<!ENTITY md5          "dd0a055673d46a78bbe8c93e0f2772ad">
 <!ENTITY launch       "Settings/Composerize">
 <!ENTITY branch       "main">
 <!ENTITY github       "jstoffel79/unraid-plugin-composerize">
