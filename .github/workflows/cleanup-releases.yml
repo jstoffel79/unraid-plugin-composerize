@@ -2,6 +2,7 @@ name: Cleanup Old Releases
 
 on:
   # Run after a release is published
+  
   release:
     types: [published]
   
