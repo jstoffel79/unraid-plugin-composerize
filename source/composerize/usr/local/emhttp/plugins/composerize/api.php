@@ -48,8 +48,11 @@ function installCompose(string $name, string $compose, bool $force): bool
 
 
 // --- Main Execution ---
+// This script can be called with GET (by openBox) or POST (by the form submission).
+// We only process the installation logic if we receive POST data.
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    echo "Error: This script only accepts POST requests.";
+    // For the initial GET request from openBox, just show a waiting message.
+    echo "Waiting for form data...";
     exit;
 }
 
@@ -76,4 +79,3 @@ try {
 } catch (Exception $e) {
     echo "An error occurred: " . htmlspecialchars($e->getMessage());
 }
-
