@@ -11,8 +11,8 @@ Menu="Utilities"
 
 define('PLUGIN_ROOT', '/plugins/composerize');
 define('PLUGIN_API_URL', PLUGIN_ROOT . '/api.php');
-// Corrected the path to composerize.php - it's not in an 'include' subfolder.
-require_once '/usr/local/emhttp/plugins/composerize/composerize.php';
+// Reverted the path to the correct location within an 'include' directory.
+require_once '/usr/local/emhttp/plugins/composerize/include/composerize.php';
 ?>
 <!DOCTYPE html>
 <html lang="en">
