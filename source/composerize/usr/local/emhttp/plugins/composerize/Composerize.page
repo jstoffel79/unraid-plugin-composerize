@@ -5,14 +5,65 @@ Type="xmenu"
 Menu="Utilities"
 ---
 <?php
+// Enable error reporting for debugging
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+
 // Copyright 2022, ibay70
 // This code is licensed under the MIT license (see LICENSE.md for details)
 // Updated by Gemini for Unraid 7.1.4+ compatibility, theming, and bug fixes.
 
 define('PLUGIN_ROOT', '/plugins/composerize');
 define('PLUGIN_API_URL', PLUGIN_ROOT . '/api.php');
-// Corrected the path using a reliable constant to prevent pathing errors.
-require_once '/usr/local/emhttp' . PLUGIN_ROOT . '/include/composerize.php';
+
+// Debug: Check if the include file exists
+$include_path = '/usr/local/emhttp' . PLUGIN_ROOT . '/include/composerize.php';
+if (!file_exists($include_path)) {
+    echo "ERROR: Include file not found at: " . $include_path;
+    echo "<br>Current directory: " . __DIR__;
+    echo "<br>Files in include directory: ";
+    $include_dir = dirname($include_path);
+    if (is_dir($include_dir)) {
+        print_r(scandir($include_dir));
+    } else {
+        echo "Include directory does not exist: " . $include_dir;
+    }
+    exit;
+}
+
+// Try to include the file and catch any errors
+try {
+    require_once $include_path;
+    echo "<!-- Include successful -->\n";
+} catch (Error $e) {
+    echo "FATAL ERROR in include: " . $e->getMessage();
+    echo "<br>File: " . $e->getFile();
+    echo "<br>Line: " . $e->getLine();
+    exit;
+} catch (Exception $e) {
+    echo "EXCEPTION in include: " . $e->getMessage();
+    exit;
+}
+
+// Test if the function exists
+if (!function_exists('getDockerTemplateList')) {
+    echo "ERROR: getDockerTemplateList function not found";
+    exit;
+}
+
+// Try to call the function and catch any errors
+try {
+    $templates = getDockerTemplateList();
+    echo "<!-- Found " . count($templates) . " templates -->\n";
+} catch (Error $e) {
+    echo "FATAL ERROR calling getDockerTemplateList: " . $e->getMessage();
+    echo "<br>File: " . $e->getFile();
+    echo "<br>Line: " . $e->getLine();
+    exit;
+} catch (Exception $e) {
+    echo "EXCEPTION calling getDockerTemplateList: " . $e->getMessage();
+    exit;
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -24,8 +75,8 @@ require_once '/usr/local/emhttp' . PLUGIN_ROOT . '/include/composerize.php';
         /* Unraid Theme CSS Variables for dynamic light/dark mode support */
         body {
             font-family: 'Roboto', sans-serif;
-            background-color: var(--primary-background-color);
-            color: var(--primary-text-color);
+            background-color: var(--primary-background-color, #f5f5f5);
+            color: var(--primary-text-color, #333);
             margin: 0;
             padding: 1.5rem;
         }
@@ -37,23 +88,23 @@ require_once '/usr/local/emhttp' . PLUGIN_ROOT . '/include/composerize.php';
             margin: 0 auto;
         }
         .panel {
-            background-color: var(--secondary-background-color);
+            background-color: var(--secondary-background-color, white);
             border-radius: 0.5rem;
             padding: 1.5rem;
-            border: 1px solid var(--border-color);
+            border: 1px solid var(--border-color, #ddd);
         }
         h2 {
             margin-top: 0;
-            border-bottom: 1px solid var(--border-color);
+            border-bottom: 1px solid var(--border-color, #ddd);
             padding-bottom: 0.5rem;
         }
         select, textarea, button {
             width: 100%;
             padding: 0.75rem;
             border-radius: 0.375rem;
-            border: 1px solid var(--border-color);
-            background-color: var(--primary-bg);
-            color: var(--primary-text-color);
+            border: 1px solid var(--border-color, #ddd);
+            background-color: var(--primary-bg, white);
+            color: var(--primary-text-color, #333);
             font-size: 1rem;
         }
         textarea {
@@ -76,24 +127,24 @@ require_once '/usr/local/emhttp' . PLUGIN_ROOT . '/include/composerize.php';
             opacity: 0.5;
             cursor: not-allowed;
         }
-        #submit-button { background-color: var(--green-color); color: white; }
-        #submit-button:hover:not(:disabled) { background-color: var(--green-hover); }
-        #undo-button { background-color: var(--yellow-color); color: white; }
-        #undo-button:hover:not(:disabled) { background-color: var(--yellow-hover); }
-        #reset-button { background-color: var(--red-color); color: white; }
-        #reset-button:hover:not(:disabled) { background-color: var(--red-hover); }
+        #submit-button { background-color: #28a745; color: white; }
+        #submit-button:hover:not(:disabled) { background-color: #218838; }
+        #undo-button { background-color: #ffc107; color: white; }
+        #undo-button:hover:not(:disabled) { background-color: #e0a800; }
+        #reset-button { background-color: #dc3545; color: white; }
+        #reset-button:hover:not(:disabled) { background-color: #c82333; }
 
         /* Non-blocking status message */
         #status-message {
             padding: 10px;
             margin-top: 15px;
             border-radius: 4px;
-            display: none; /* Hidden by default */
+            display: none;
             text-align: center;
             color: white;
         }
-        #status-message.success { background-color: var(--ok-color); }
-        #status-message.error { background-color: var(--error-color); }
+        #status-message.success { background-color: #28a745; }
+        #status-message.error { background-color: #dc3545; }
     </style>
 </head>
 <body>
@@ -102,10 +153,11 @@ require_once '/usr/local/emhttp' . PLUGIN_ROOT . '/include/composerize.php';
         <h2>Select a Running Container Template</h2>
         <select id="template-select">
             <option value="" selected>Choose a template...</option>
-            <?php foreach (getDockerTemplateList() as $name => $command): ?>
+            <?php foreach ($templates as $name => $command): ?>
                 <option value="<?= htmlspecialchars($command); ?>"><?= htmlspecialchars($name); ?></option>
             <?php endforeach; ?>
         </select>
+        <p>Debug: Found <?= count($templates); ?> running container templates</p>
     </div>
     <div class="panel">
         <h2>Compose Preview</h2>
@@ -125,6 +177,17 @@ require_once '/usr/local/emhttp' . PLUGIN_ROOT . '/include/composerize.php';
 <script src="<?= htmlspecialchars(PLUGIN_ROOT); ?>/js/composerize.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
+    console.log('DOM loaded');
+    
+    // Check if composerize function is available
+    if (typeof composerize !== 'function') {
+        console.error('composerize function not found - check if composerize.min.js loaded correctly');
+        document.getElementById('status-message').textContent = 'Error: composerize.min.js not loaded';
+        document.getElementById('status-message').className = 'error';
+        document.getElementById('status-message').style.display = 'block';
+        return;
+    }
+    
     const templateSelect = document.getElementById('template-select');
     const composeText = document.getElementById('compose-text');
     const submitButton = document.getElementById('submit-button');
@@ -139,11 +202,11 @@ document.addEventListener('DOMContentLoaded', () => {
         statusMessage.textContent = message;
         statusMessage.className = type;
         statusMessage.style.display = 'block';
-        setTimeout(() => { statusMessage.style.display = 'none'; }, 5000); // Hide after 5 seconds
+        setTimeout(() => { statusMessage.style.display = 'none'; }, 5000);
     }
 
     function handleApply(event) {
-        event.preventDefault(); // Prevent default form submission
+        event.preventDefault();
         const name = stackNameInput.value;
         const compose = composeText.value;
 
@@ -158,7 +221,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const formData = new FormData();
         formData.append('name', name);
         formData.append('compose', compose);
-        formData.append('force', 'false'); // Or implement a checkbox for this
+        formData.append('force', 'false');
 
         fetch("<?= htmlspecialchars(PLUGIN_API_URL); ?>", {
             method: 'POST',
@@ -185,16 +248,20 @@ document.addEventListener('DOMContentLoaded', () => {
     form.addEventListener('submit', handleApply);
 
     templateSelect.addEventListener('change', () => {
+        console.log('Template selected');
         const selectedOption = templateSelect.options[templateSelect.selectedIndex];
         const command = selectedOption.value;
         if (command) {
             try {
+                console.log('Converting command:', command);
                 originalCompose = composerize(command);
                 composeText.value = originalCompose;
                 stackNameInput.value = selectedOption.text;
                 submitButton.disabled = false;
                 undoButton.disabled = false;
+                console.log('Conversion successful');
             } catch (e) {
+                console.error('Conversion error:', e);
                 showStatus(`Error generating compose: ${e.message}`, 'error');
                 originalCompose = '';
                 composeText.value = `Could not parse the docker run command for this template.\n\n${command}`;
@@ -216,6 +283,8 @@ document.addEventListener('DOMContentLoaded', () => {
         templateSelect.selectedIndex = 0;
         templateSelect.dispatchEvent(new Event('change'));
     });
+    
+    console.log('JavaScript initialization complete');
 });
 </script>
 </body>
