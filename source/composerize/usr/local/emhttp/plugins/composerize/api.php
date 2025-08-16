@@ -5,7 +5,7 @@
  */
 
 // --- Dependencies ---
-// Use the more robust helper functions for installation.
+// Use a relative path for reliability.
 require_once __DIR__ . '/include/api_helpers.php';
 
 // --- Main Execution ---
@@ -39,7 +39,7 @@ try {
     } else {
         // The stack already exists, and force was false.
         http_response_code(409); // Conflict
-        echo "Stack '{$sanitizedName}' already exists. Installation aborted. (You can enable a 'force overwrite' option if needed).";
+        echo "Stack '{$sanitizedName}' already exists. Installation aborted.";
     }
 } catch (Exception $e) {
     // An error occurred during file operations.
@@ -47,4 +47,3 @@ try {
     error_log("Composerize Plugin Error: " . $e->getMessage()); // Log the detailed error for the admin
     echo "An error occurred: " . htmlspecialchars($e->getMessage());
 }
-
