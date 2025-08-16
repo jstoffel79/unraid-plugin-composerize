@@ -11,6 +11,7 @@
 .Spotlight-V100
 .Trashes
 
+
 # IDE and editor directories
 .vscode/
 .idea/
