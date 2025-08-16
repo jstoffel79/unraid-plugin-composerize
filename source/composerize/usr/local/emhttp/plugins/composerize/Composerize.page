@@ -5,7 +5,6 @@ Type="xmenu"
 Menu="Utilities"
 ---
 <?php
-
 /**
  * Composerize Plugin UI for Unraid 7.
  */
@@ -29,9 +28,11 @@ require_once '/usr/local/emhttp/plugins/composerize/include/composerize.php';
             --border-color: #718096;
             --text-color: #e2e8f0;
             --accent-color: #38a169;
+            --font-family: 'Inter', sans-serif;
+            --monospace-font: 'Fira Code', 'Cascadia Code', monospace;
         }
         body {
-            font-family: 'Inter', sans-serif;
+            font-family: var(--font-family);
             background-color: var(--primary-bg);
             color: var(--text-color);
             margin: 0;
@@ -64,7 +65,7 @@ require_once '/usr/local/emhttp/plugins/composerize/include/composerize.php';
             font-size: 1rem;
         }
         textarea {
-            font-family: 'Fira Code', 'Cascadia Code', monospace;
+            font-family: var(--monospace-font);
             min-height: 400px;
             resize: vertical;
         }
@@ -103,7 +104,6 @@ require_once '/usr/local/emhttp/plugins/composerize/include/composerize.php';
     </div>
     <div class="panel">
         <h2>Compose Preview</h2>
-        <!-- The form now submits to Unraid's script handler -->
         <form id="compose-form" method="post" onsubmit="return handleApply();">
             <textarea id="compose-text" name="compose" spellcheck="false" placeholder="Select a template to see the Docker Compose preview..."></textarea>
             <input type="hidden" id="stack-name" name="name" value="">
@@ -138,11 +138,12 @@ document.addEventListener('DOMContentLoaded', () => {
             return false; // Prevent form submission
         }
         
-        // Use Unraid's built-in openBox function to show the script output in a modal
-        openBox("<?= htmlspecialchars(PLUGIN_API_URL); ?>", "Installing Stack", 600, 800, true);
+        // Use Unraid's built-in openBox function to show the script output in a modal.
+        // This is the standard, reliable way to handle form submissions in plugins.
+        openBox("<?= htmlspecialchars(PLUGIN_API_URL); ?>", "Installing Stack...", 600, 800, true);
         
         // We need to manually submit the form data via a hidden iframe
-        // because openBox does not handle POST data.
+        // because openBox does not handle POST data itself.
         const iframe = document.createElement('iframe');
         iframe.name = 'hidden-form-target';
         iframe.style.display = 'none';
@@ -152,7 +153,7 @@ document.addEventListener('DOMContentLoaded', () => {
         form.action = "<?= htmlspecialchars(PLUGIN_API_URL); ?>";
         form.submit();
 
-        // Prevent the main page from navigating
+        // Prevent the main page from navigating away.
         return false;
     }
     
