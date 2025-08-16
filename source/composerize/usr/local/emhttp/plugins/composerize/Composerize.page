@@ -364,11 +364,22 @@ $(function() {
         if (!containerName) {
             throw new Error('Container name must be provided.');
         }
+        
+        let commandToParse = dockerRun;
+
+        // --- FIX: Normalize quoted arguments to a format the library understands better ---
+        // Converts --flag='value' to --flag "value" and -f='value' to -f "value"
+        commandToParse = commandToParse.replace(/(-{1,2}[a-zA-Z0-9-]+)='([^']*)'/g, '$1 "$2"');
+
+        const hasNoHealthcheck = commandToParse.includes('--no-healthcheck');
+        if (hasNoHealthcheck) {
+            commandToParse = commandToParse.replace(/--no-healthcheck/g, '').trim();
+        }
 
         // Use the external composerize library for the base conversion
-        let composeObj = composerize(dockerRun);
+        let composeObj = composerize(commandToParse);
         
-        // --- FIX: Add validation to prevent crash on parsing failure ---
+        // --- Add validation to prevent crash on parsing failure ---
         if (!composeObj || !composeObj.services || typeof composeObj.services !== 'object' || Object.keys(composeObj.services).length === 0) {
             throw new Error('The composerize library failed to parse the Docker command. Please check for unusual characters or formatting in the template.');
         }
@@ -378,21 +389,25 @@ $(function() {
         const service = composeObj.services[originalServiceName];
 
         // --- RENAME SERVICE and SET CONTAINER NAME ---
-        // This ensures the service key and container_name match the Unraid template name.
         if (originalServiceName !== containerName) {
             delete composeObj.services[originalServiceName];
             composeObj.services[containerName] = service;
         }
-        service.container_name = containerName; // Explicitly set container_name
+        service.container_name = containerName;
 
         // --- APPLY CUSTOMIZATIONS ---
         
-        // Apply restart policy from settings, unless one was already in the command
+        // If --no-healthcheck was present, add the correct YAML equivalent
+        if (hasNoHealthcheck) {
+            service.healthcheck = {
+                disable: true
+            };
+        }
+        
         if (!service.restart) {
             service.restart = customizationSettings.restartPolicy;
         }
         
-        // Add logging configuration if enabled
         if (customizationSettings.addLogging) {
             service.logging = {
                 driver: 'json-file',
@@ -403,7 +418,6 @@ $(function() {
             };
         }
         
-        // Handle networking
         if (customizationSettings.customNetwork) {
             service.networks = [customizationSettings.customNetwork];
         }
@@ -417,7 +431,6 @@ $(function() {
             };
         }
         
-        // Remove the deprecated 'version' key
         delete composeObj.version;
 
         return objectToYaml(composeObj);
@@ -431,7 +444,7 @@ $(function() {
      */
     function objectToYaml(obj, indent = 0) {
         let yaml = '';
-        const spaces = '  '.repeat(indent); // CRITICAL FIX: Use regular spaces
+        const spaces = '  '.repeat(indent);
 
         for (const key in obj) {
             if (Object.prototype.hasOwnProperty.call(obj, key)) {
@@ -447,7 +460,6 @@ $(function() {
                     yaml += `${spaces}${key}:\n`;
                     yaml += objectToYaml(value, indent + 1);
                 } else {
-                    // Quote strings that might be interpreted as numbers or booleans
                     const needsQuotes = /[:\s]/.test(String(value)) || /^\d+$/.test(String(value)) || /^(true|false|yes|no)$/i.test(String(value));
                     const formattedValue = needsQuotes ? `'${value}'` : value;
                     yaml += `${spaces}${key}: ${formattedValue}\n`;
