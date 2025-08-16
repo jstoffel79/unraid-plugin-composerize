@@ -11,8 +11,8 @@ Menu="Utilities"
 
 define('PLUGIN_ROOT', '/plugins/composerize');
 define('PLUGIN_API_URL', PLUGIN_ROOT . '/api.php');
-// Changed to a relative path using __DIR__ for better reliability within Unraid's page rendering.
-require_once __DIR__ . '/include/composerize.php';
+// Corrected the path using a reliable constant to prevent pathing errors.
+require_once '/usr/local/emhttp' . PLUGIN_ROOT . '/include/composerize.php';
 ?>
 <!DOCTYPE html>
 <html lang="en">
