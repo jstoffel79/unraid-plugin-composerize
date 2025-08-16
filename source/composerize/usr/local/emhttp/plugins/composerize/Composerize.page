@@ -367,9 +367,11 @@ $(function() {
         
         let commandToParse = dockerRun;
 
-        // --- FIX: Normalize quoted arguments to a format the library understands better ---
-        // Converts --flag='value' to --flag "value" and -f='value' to -f "value"
+        // --- Sanitize command for better parsing ---
+        // 1. Normalize --flag='value' to --flag "value"
         commandToParse = commandToParse.replace(/(-{1,2}[a-zA-Z0-9-]+)='([^']*)'/g, '$1 "$2"');
+        // 2. Normalize -e 'KEY=VALUE' to -e "KEY=VALUE" for complex env vars
+        commandToParse = commandToParse.replace(/-e '([^']*)'/g, '-e "$1"');
 
         const hasNoHealthcheck = commandToParse.includes('--no-healthcheck');
         if (hasNoHealthcheck) {
