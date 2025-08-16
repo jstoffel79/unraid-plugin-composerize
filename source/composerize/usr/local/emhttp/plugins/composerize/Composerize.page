@@ -368,6 +368,11 @@ $(function() {
         // Use the external composerize library for the base conversion
         let composeObj = composerize(dockerRun);
         
+        // --- FIX: Add validation to prevent crash on parsing failure ---
+        if (!composeObj || !composeObj.services || typeof composeObj.services !== 'object' || Object.keys(composeObj.services).length === 0) {
+            throw new Error('The composerize library failed to parse the Docker command. Please check for unusual characters or formatting in the template.');
+        }
+
         // Get the original service name and the service object
         const originalServiceName = Object.keys(composeObj.services)[0];
         const service = composeObj.services[originalServiceName];
