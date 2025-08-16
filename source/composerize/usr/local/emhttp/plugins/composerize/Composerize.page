@@ -1,8 +1,3 @@
-<?php
-// Copyright 2022, ibay70
-// This code is licensed under the MIT license (see LICENSE.md for details)
-// Updated by Gemini for Unraid 7.1.4+ compatibility, theming, and bug fixes.
-?>
 ---
 Title="Composerize"
 Icon="composerize.png"
@@ -10,6 +5,10 @@ Type="xmenu"
 Menu="Utilities"
 ---
 <?php
+// Copyright 2022, ibay70
+// This code is licensed under the MIT license (see LICENSE.md for details)
+// Updated by Gemini for Unraid 7.1.4+ compatibility, theming, and bug fixes.
+
 define('PLUGIN_ROOT', '/plugins/composerize');
 define('PLUGIN_API_URL', PLUGIN_ROOT . '/api.php');
 require_once '/usr/local/emhttp/plugins/composerize/include/composerize.php';
