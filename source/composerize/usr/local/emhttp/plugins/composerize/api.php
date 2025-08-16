@@ -1,58 +1,18 @@
 <?php
 /**
  * api.php - Handles the installation of a Docker Compose stack.
- * This script is now designed to be called by Unraid's openBox() function
- * and will output plain text status messages.
+ * This script is now designed to handle POST requests from the plugin UI.
  */
 
-// --- Constants ---
-define('COMPOSE_DIRECTORY', '/boot/config/plugins/compose.manager/projects/');
-
-/**
- * Validates a given string to see if it's a non-empty YAML string.
- */
-function isValidYaml(?string $yamlString): bool
-{
-    return !empty($yamlString);
-}
-
-/**
- * Installs a Docker Compose stack to the disk.
- */
-function installCompose(string $name, string $compose, bool $force): bool
-{
-    $composeProjectDirectory = COMPOSE_DIRECTORY . $name;
-    $composeYamlFilePath = $composeProjectDirectory . '/docker-compose.yml';
-    $composeNameFilePath = $composeProjectDirectory . '/name';
-
-    if (!$force && (file_exists($composeProjectDirectory) || file_exists($composeYamlFilePath))) {
-        return false;
-    }
-
-    if (!is_dir($composeProjectDirectory)) {
-        if (!@mkdir($composeProjectDirectory, 0755, true)) {
-            throw new Exception("Failed to create project directory. Check permissions for: " . COMPOSE_DIRECTORY);
-        }
-    }
-
-    if (file_put_contents($composeNameFilePath, $name) === false) {
-        throw new Exception("Failed to write 'name' file. Check permissions for: {$composeProjectDirectory}");
-    }
-
-    if (file_put_contents($composeYamlFilePath, $compose) === false) {
-        throw new Exception("Failed to write 'docker-compose.yml' file. Check permissions for: {$composeProjectDirectory}");
-    }
-
-    return true;
-}
-
+// --- Dependencies ---
+// Use the more robust helper functions for installation.
+require_once __DIR__ . '/include/api_helpers.php';
 
 // --- Main Execution ---
-// This script can be called with GET (by openBox) or POST (by the form submission).
-// We only process the installation logic if we receive POST data.
+// This script should only be called via POST.
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    // For the initial GET request from openBox, just show a waiting message.
-    echo "Waiting for form data...";
+    http_response_code(405); // Method Not Allowed
+    echo "Error: This script only accepts POST requests.";
     exit;
 }
 
@@ -61,21 +21,30 @@ $name    = $_POST['name'] ?? null;
 $compose = $_POST['compose'] ?? null;
 $force   = filter_var($_POST['force'] ?? 'false', FILTER_VALIDATE_BOOLEAN);
 
+// Sanitize the name to be a valid directory name.
 $sanitizedName = $name ? preg_replace('/[^a-zA-Z0-9_-]/', '', $name) : null;
 
 // --- Validation and Installation ---
 if (empty($sanitizedName) || empty($compose) || !isValidYaml($compose)) {
-    echo "Error: Invalid or missing data received.";
+    http_response_code(400); // Bad Request
+    echo "Error: Invalid or missing data received. Please select a template.";
     exit;
 }
 
 try {
     $status = installCompose($sanitizedName, $compose, $force);
     if ($status) {
+        // Success
         echo "Stack '{$sanitizedName}' installed successfully!";
     } else {
-        echo "Stack '{$sanitizedName}' already exists. Installation aborted.";
+        // The stack already exists, and force was false.
+        http_response_code(409); // Conflict
+        echo "Stack '{$sanitizedName}' already exists. Installation aborted. (You can enable a 'force overwrite' option if needed).";
     }
 } catch (Exception $e) {
+    // An error occurred during file operations.
+    http_response_code(500); // Internal Server Error
+    error_log("Composerize Plugin Error: " . $e->getMessage()); // Log the detailed error for the admin
     echo "An error occurred: " . htmlspecialchars($e->getMessage());
 }
+
