@@ -1,0 +1,102 @@
+name: Clean Up Old Commits
+
+on:
+  workflow_dispatch:  # Manual trigger only for safety
+  # Uncomment below if you want it to run on a schedule
+  # schedule:
+  #   - cron: '0 2 * * 0'  # Weekly on Sundays at 2 AM
+
+jobs:
+  cleanup-commits:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Fetch all history
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Configure Git
+      run: |
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+    - name: Get current branch
+      id: branch
+      run: |
+        CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+        echo "current_branch=$CURRENT_BRANCH" >> $GITHUB_OUTPUT
+
+    - name: Create new branch with last 3 commits
+      run: |
+        # Get the hash of the 3rd commit from HEAD
+        THIRD_COMMIT=$(git rev-parse HEAD~2)
+        
+        # Create a new orphan branch
+        git checkout --orphan temp-cleanup
+        
+        # Reset to the 3rd commit from HEAD
+        git reset --hard $THIRD_COMMIT
+        
+        # Cherry-pick the last 2 commits to maintain history
+        git cherry-pick HEAD~-2..HEAD~-1 || true
+        git cherry-pick HEAD~-1..HEAD || true
+
+    - name: Alternative method - Create shallow clone with last 3 commits
+      run: |
+        # Alternative approach: create new history with last 3 commits
+        COMMIT_3=$(git rev-parse HEAD~2)
+        COMMIT_2=$(git rev-parse HEAD~1)
+        COMMIT_1=$(git rev-parse HEAD)
+        
+        # Create new orphan branch
+        git checkout --orphan cleaned-history
+        git rm -rf .
+        
+        # Apply changes from 3rd last commit
+        git checkout $COMMIT_3 -- .
+        git add .
+        git commit -m "$(git log --format=%B -n 1 $COMMIT_3)"
+        
+        # Apply changes from 2nd last commit
+        git checkout $COMMIT_2 -- .
+        git add . || true
+        if ! git diff --cached --quiet; then
+          git commit -m "$(git log --format=%B -n 1 $COMMIT_2)"
+        fi
+        
+        # Apply changes from last commit
+        git checkout $COMMIT_1 -- .
+        git add . || true
+        if ! git diff --cached --quiet; then
+          git commit -m "$(git log --format=%B -n 1 $COMMIT_1)"
+        fi
+
+    - name: Force push cleaned history
+      run: |
+        # Push the cleaned branch (use with extreme caution)
+        git push origin cleaned-history --force
+        
+    - name: Create backup branch (recommended)
+      run: |
+        # Create backup of original branch
+        git checkout ${{ steps.branch.outputs.current_branch }}
+        git branch backup-$(date +%Y%m%d-%H%M%S)
+        git push origin backup-$(date +%Y%m%d-%H%M%S)
+
+    - name: Replace main branch (DANGEROUS - uncomment with caution)
+      run: |
+        echo "To replace the main branch with cleaned history:"
+        echo "1. Review the 'cleaned-history' branch"
+        echo "2. Uncomment the following lines if you're sure:"
+        echo "# git checkout cleaned-history"
+        echo "# git branch -D ${{ steps.branch.outputs.current_branch }}"
+        echo "# git checkout -b ${{ steps.branch.outputs.current_branch }}"
+        echo "# git push origin ${{ steps.branch.outputs.current_branch }} --force"
+        
+        # UNCOMMENT THESE LINES ONLY AFTER TESTING:
+        # git checkout cleaned-history
+        # git branch -D ${{ steps.branch.outputs.current_branch }}
+        # git checkout -b ${{ steps.branch.outputs.current_branch }}
+        # git push origin ${{ steps.branch.outputs.current_branch }} --force
