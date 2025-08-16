@@ -1,0 +1,35 @@
+# This is a GitHub Actions workflow to automatically clean up old releases.
+#
+# To use this, create a file at: .github/workflows/cleanup-releases.yml
+# in your repository and paste this content into it.
+#
+name: Cleanup Old Releases
+
+# This workflow is triggered manually from the Actions tab.
+# You can also add other triggers like `release: { types: [published] }`
+# to run it automatically after every new release.
+on:
+  workflow_dispatch:
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+
+    # Add this permissions block to allow the job to delete releases.
+    permissions:
+      contents: write
+
+    steps:
+      # Step 1: Use a dedicated action to find and delete old releases.
+      - name: Delete older releases
+        uses: dev-drpr/delete-older-releases@v0.4.0
+        with:
+          # The number of latest releases to keep.
+          keep_latest: 3
+          # Set to 'true' to actually delete the releases.
+          # It's recommended to run it with 'false' first (dry run) to see which releases would be deleted.
+          delete_tags: true
+        env:
+          # This token is automatically provided by GitHub Actions.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
