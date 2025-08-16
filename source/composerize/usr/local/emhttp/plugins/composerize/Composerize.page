@@ -1,3 +1,8 @@
+<?php
+// Copyright 2022, ibay70
+// This code is licensed under the MIT license (see LICENSE.md for details)
+// Updated by Gemini for Unraid 7.1.4+ compatibility, theming, and bug fixes.
+?>
 ---
 Title="Composerize"
 Icon="composerize.png"
@@ -5,15 +10,9 @@ Type="xmenu"
 Menu="Utilities"
 ---
 <?php
-/**
- * Composerize Plugin UI for Unraid 7.
- */
-
 define('PLUGIN_ROOT', '/plugins/composerize');
 define('PLUGIN_API_URL', PLUGIN_ROOT . '/api.php');
-
 require_once '/usr/local/emhttp/plugins/composerize/include/composerize.php';
-
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -22,19 +21,11 @@ require_once '/usr/local/emhttp/plugins/composerize/include/composerize.php';
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Composerize</title>
     <style>
-        :root {
-            --primary-bg: #2d3748;
-            --secondary-bg: #4a5568;
-            --border-color: #718096;
-            --text-color: #e2e8f0;
-            --accent-color: #38a169;
-            --font-family: 'Inter', sans-serif;
-            --monospace-font: 'Fira Code', 'Cascadia Code', monospace;
-        }
+        /* Unraid Theme CSS Variables for dynamic light/dark mode support */
         body {
-            font-family: var(--font-family);
-            background-color: var(--primary-bg);
-            color: var(--text-color);
+            font-family: 'Roboto', sans-serif;
+            background-color: var(--primary-background-color);
+            color: var(--primary-text-color);
             margin: 0;
             padding: 1.5rem;
         }
@@ -46,9 +37,10 @@ require_once '/usr/local/emhttp/plugins/composerize/include/composerize.php';
             margin: 0 auto;
         }
         .panel {
-            background-color: var(--secondary-bg);
+            background-color: var(--secondary-background-color);
             border-radius: 0.5rem;
             padding: 1.5rem;
+            border: 1px solid var(--border-color);
         }
         h2 {
             margin-top: 0;
@@ -61,11 +53,11 @@ require_once '/usr/local/emhttp/plugins/composerize/include/composerize.php';
             border-radius: 0.375rem;
             border: 1px solid var(--border-color);
             background-color: var(--primary-bg);
-            color: var(--text-color);
+            color: var(--primary-text-color);
             font-size: 1rem;
         }
         textarea {
-            font-family: var(--monospace-font);
+            font-family: 'Courier New', Courier, monospace;
             min-height: 400px;
             resize: vertical;
         }
@@ -78,23 +70,36 @@ require_once '/usr/local/emhttp/plugins/composerize/include/composerize.php';
             cursor: pointer;
             font-weight: 600;
             border: none;
+            transition: background-color 0.2s;
         }
         button:disabled {
             opacity: 0.5;
             cursor: not-allowed;
         }
-        #submit-button { background-color: var(--accent-color); }
-        #undo-button { background-color: #d69e2e; }
-        #reset-button { background-color: #9b2c2c; }
+        #submit-button { background-color: var(--green-color); color: white; }
+        #submit-button:hover:not(:disabled) { background-color: var(--green-hover); }
+        #undo-button { background-color: var(--yellow-color); color: white; }
+        #undo-button:hover:not(:disabled) { background-color: var(--yellow-hover); }
+        #reset-button { background-color: var(--red-color); color: white; }
+        #reset-button:hover:not(:disabled) { background-color: var(--red-hover); }
+
+        /* Non-blocking status message */
+        #status-message {
+            padding: 10px;
+            margin-top: 15px;
+            border-radius: 4px;
+            display: none; /* Hidden by default */
+            text-align: center;
+            color: white;
+        }
+        #status-message.success { background-color: var(--ok-color); }
+        #status-message.error { background-color: var(--error-color); }
     </style>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Fira+Code&display=swap" rel="stylesheet">
 </head>
 <body>
 <div class="container">
     <div class="panel">
-        <h2>Select a Template</h2>
+        <h2>Select a Running Container Template</h2>
         <select id="template-select">
             <option value="" selected>Choose a template...</option>
             <?php foreach (getDockerTemplateList() as $name => $command): ?>
@@ -104,11 +109,10 @@ require_once '/usr/local/emhttp/plugins/composerize/include/composerize.php';
     </div>
     <div class="panel">
         <h2>Compose Preview</h2>
-        <form id="compose-form" method="post" onsubmit="return handleApply();">
+        <form id="compose-form">
             <textarea id="compose-text" name="compose" spellcheck="false" placeholder="Select a template to see the Docker Compose preview..."></textarea>
             <input type="hidden" id="stack-name" name="name" value="">
-            <input type="hidden" id="force-overwrite" name="force" value="false">
-            
+            <div id="status-message"></div>
             <div class="button-group">
                 <button type="submit" id="submit-button" disabled>Apply</button>
                 <button type="button" id="undo-button" disabled>Revert Changes</button>
@@ -128,47 +132,75 @@ document.addEventListener('DOMContentLoaded', () => {
     const resetButton = document.getElementById('reset-button');
     const stackNameInput = document.getElementById('stack-name');
     const form = document.getElementById('compose-form');
+    const statusMessage = document.getElementById('status-message');
     let originalCompose = '';
 
-    function handleApply() {
+    function showStatus(message, type = 'success') {
+        statusMessage.textContent = message;
+        statusMessage.className = type;
+        statusMessage.style.display = 'block';
+        setTimeout(() => { statusMessage.style.display = 'none'; }, 5000); // Hide after 5 seconds
+    }
+
+    function handleApply(event) {
+        event.preventDefault(); // Prevent default form submission
         const name = stackNameInput.value;
         const compose = composeText.value;
-        if (!name || !compose) {
-            alert('Please select a template and ensure the compose preview is not empty.');
-            return false; // Prevent form submission
-        }
-        
-        // Use Unraid's built-in openBox function to show the script output in a modal.
-        // This is the standard, reliable way to handle form submissions in plugins.
-        openBox("<?= htmlspecialchars(PLUGIN_API_URL); ?>", "Installing Stack...", 600, 800, true);
-        
-        // We need to manually submit the form data via a hidden iframe
-        // because openBox does not handle POST data itself.
-        const iframe = document.createElement('iframe');
-        iframe.name = 'hidden-form-target';
-        iframe.style.display = 'none';
-        document.body.appendChild(iframe);
-        
-        form.target = 'hidden-form-target';
-        form.action = "<?= htmlspecialchars(PLUGIN_API_URL); ?>";
-        form.submit();
 
-        // Prevent the main page from navigating away.
-        return false;
+        if (!name || !compose) {
+            showStatus('Please select a template first.', 'error');
+            return;
+        }
+
+        submitButton.disabled = true;
+        submitButton.textContent = 'Applying...';
+
+        const formData = new FormData();
+        formData.append('name', name);
+        formData.append('compose', compose);
+        formData.append('force', 'false'); // Or implement a checkbox for this
+
+        fetch("<?= htmlspecialchars(PLUGIN_API_URL); ?>", {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.text().then(text => ({ ok: response.ok, text })))
+        .then(({ ok, text }) => {
+            if (ok) {
+                showStatus(text, 'success');
+            } else {
+                throw new Error(text);
+            }
+        })
+        .catch(error => {
+            console.error('Error applying compose stack:', error);
+            showStatus(`Error: ${error.message}`, 'error');
+        })
+        .finally(() => {
+            submitButton.disabled = false;
+            submitButton.textContent = 'Apply';
+        });
     }
     
-    // Attach the handler to the form's onsubmit event
-    form.onsubmit = handleApply;
+    form.addEventListener('submit', handleApply);
 
     templateSelect.addEventListener('change', () => {
         const selectedOption = templateSelect.options[templateSelect.selectedIndex];
         const command = selectedOption.value;
         if (command) {
-            originalCompose = composerize(command);
-            composeText.value = originalCompose;
-            stackNameInput.value = selectedOption.text;
-            submitButton.disabled = false;
-            undoButton.disabled = false;
+            try {
+                originalCompose = composerize(command);
+                composeText.value = originalCompose;
+                stackNameInput.value = selectedOption.text;
+                submitButton.disabled = false;
+                undoButton.disabled = false;
+            } catch (e) {
+                showStatus(`Error generating compose: ${e.message}`, 'error');
+                originalCompose = '';
+                composeText.value = `Could not parse the docker run command for this template.\n\n${command}`;
+                submitButton.disabled = true;
+                undoButton.disabled = true;
+            }
         } else {
             originalCompose = '';
             composeText.value = '';
