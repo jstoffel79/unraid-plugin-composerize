@@ -5,10 +5,6 @@ Type="xmenu"
 Menu="Utilities"
 ---
 <?php
-// Enable error reporting for debugging
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
-
 // Copyright 2022, ibay70
 // This code is licensed under the MIT license (see LICENSE.md for details)
 // Updated by Gemini for Unraid 7.1.4+ compatibility, theming, and bug fixes.
@@ -16,157 +12,155 @@ ini_set('display_errors', 1);
 define('PLUGIN_ROOT', '/plugins/composerize');
 define('PLUGIN_API_URL', PLUGIN_ROOT . '/api.php');
 
-// Debug: Check if the include file exists
-$include_path = '/usr/local/emhttp' . PLUGIN_ROOT . '/include/composerize.php';
-if (!file_exists($include_path)) {
-    echo "ERROR: Include file not found at: " . $include_path;
-    echo "<br>Current directory: " . __DIR__;
-    echo "<br>Files in include directory: ";
-    $include_dir = dirname($include_path);
-    if (is_dir($include_dir)) {
-        print_r(scandir($include_dir));
-    } else {
-        echo "Include directory does not exist: " . $include_dir;
+// Suppress errors and try to include
+$templates = [];
+try {
+    @require_once '/usr/local/emhttp' . PLUGIN_ROOT . '/include/composerize.php';
+    if (function_exists('getDockerTemplateList')) {
+        $templates = getDockerTemplateList();
     }
-    exit;
-}
-
-// Try to include the file and catch any errors
-try {
-    require_once $include_path;
-    echo "<!-- Include successful -->\n";
-} catch (Error $e) {
-    echo "FATAL ERROR in include: " . $e->getMessage();
-    echo "<br>File: " . $e->getFile();
-    echo "<br>Line: " . $e->getLine();
-    exit;
-} catch (Exception $e) {
-    echo "EXCEPTION in include: " . $e->getMessage();
-    exit;
-}
-
-// Test if the function exists
-if (!function_exists('getDockerTemplateList')) {
-    echo "ERROR: getDockerTemplateList function not found";
-    exit;
-}
-
-// Try to call the function and catch any errors
-try {
-    $templates = getDockerTemplateList();
-    echo "<!-- Found " . count($templates) . " templates -->\n";
-} catch (Error $e) {
-    echo "FATAL ERROR calling getDockerTemplateList: " . $e->getMessage();
-    echo "<br>File: " . $e->getFile();
-    echo "<br>Line: " . $e->getLine();
-    exit;
-} catch (Exception $e) {
-    echo "EXCEPTION calling getDockerTemplateList: " . $e->getMessage();
-    exit;
+} catch (Throwable $e) {
+    error_log("Composerize Plugin Error: " . $e->getMessage());
 }
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Composerize</title>
-    <style>
-        /* Unraid Theme CSS Variables for dynamic light/dark mode support */
-        body {
-            font-family: 'Roboto', sans-serif;
-            background-color: var(--primary-background-color, #f5f5f5);
-            color: var(--primary-text-color, #333);
-            margin: 0;
-            padding: 1.5rem;
-        }
-        .container {
-            display: flex;
-            flex-direction: column;
-            gap: 1.5rem;
-            max-width: 1200px;
-            margin: 0 auto;
-        }
-        .panel {
-            background-color: var(--secondary-background-color, white);
-            border-radius: 0.5rem;
-            padding: 1.5rem;
-            border: 1px solid var(--border-color, #ddd);
-        }
-        h2 {
-            margin-top: 0;
-            border-bottom: 1px solid var(--border-color, #ddd);
-            padding-bottom: 0.5rem;
-        }
-        select, textarea, button {
-            width: 100%;
-            padding: 0.75rem;
-            border-radius: 0.375rem;
-            border: 1px solid var(--border-color, #ddd);
-            background-color: var(--primary-bg, white);
-            color: var(--primary-text-color, #333);
-            font-size: 1rem;
-        }
-        textarea {
-            font-family: 'Courier New', Courier, monospace;
-            min-height: 400px;
-            resize: vertical;
-        }
-        .button-group {
-            display: flex;
-            gap: 1rem;
-            margin-top: 1rem;
-        }
-        button {
-            cursor: pointer;
-            font-weight: 600;
-            border: none;
-            transition: background-color 0.2s;
-        }
-        button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-        #submit-button { background-color: #28a745; color: white; }
-        #submit-button:hover:not(:disabled) { background-color: #218838; }
-        #undo-button { background-color: #ffc107; color: white; }
-        #undo-button:hover:not(:disabled) { background-color: #e0a800; }
-        #reset-button { background-color: #dc3545; color: white; }
-        #reset-button:hover:not(:disabled) { background-color: #c82333; }
 
-        /* Non-blocking status message */
-        #status-message {
-            padding: 10px;
-            margin-top: 15px;
-            border-radius: 4px;
-            display: none;
-            text-align: center;
-            color: white;
-        }
-        #status-message.success { background-color: #28a745; }
-        #status-message.error { background-color: #dc3545; }
-    </style>
-</head>
-<body>
-<div class="container">
-    <div class="panel">
-        <h2>Select a Running Container Template</h2>
+<link type="text/css" rel="stylesheet" href="<?autov('/webGui/styles/jquery.ui.css')?>">
+<link type="text/css" rel="stylesheet" href="<?autov('/plugins/dynamix/styles/dropdownchecklist.css')?>">
+<style>
+/* Unraid-compatible styles */
+.composerize-container {
+    padding: 20px;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.composerize-panel {
+    background: rgba(var(--accent-bg), 0.33);
+    border: 1px solid rgba(var(--accent-bg), 0.5);
+    border-radius: 5px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.composerize-panel h3 {
+    margin-top: 0;
+    color: var(--text-bright);
+    border-bottom: 1px solid rgba(var(--accent-bg), 0.5);
+    padding-bottom: 10px;
+}
+
+select, textarea, button {
+    font-family: inherit;
+    font-size: 13px;
+}
+
+#template-select {
+    width: 100%;
+    padding: 8px;
+    margin-bottom: 10px;
+}
+
+#compose-text {
+    width: 100%;
+    height: 400px;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    padding: 10px;
+    border: 1px solid #ccc;
+    resize: vertical;
+}
+
+.button-group {
+    margin-top: 15px;
+}
+
+.button-group button {
+    margin-right: 10px;
+    padding: 8px 16px;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+}
+
+#submit-button {
+    background: #4a90e2;
+    color: white;
+}
+
+#submit-button:hover:not(:disabled) {
+    background: #357abd;
+}
+
+#submit-button:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+}
+
+#undo-button {
+    background: #f5a623;
+    color: white;
+}
+
+#undo-button:hover:not(:disabled) {
+    background: #e6941a;
+}
+
+#reset-button {
+    background: #d0021b;
+    color: white;
+}
+
+#reset-button:hover {
+    background: #b8021a;
+}
+
+#status-message {
+    padding: 10px;
+    margin: 10px 0;
+    border-radius: 3px;
+    display: none;
+    text-align: center;
+}
+
+#status-message.success {
+    background: #d4edda;
+    border: 1px solid #c3e6cb;
+    color: #155724;
+}
+
+#status-message.error {
+    background: #f8d7da;
+    border: 1px solid #f5c6cb;
+    color: #721c24;
+}
+</style>
+
+<div class="composerize-container">
+    <div class="composerize-panel">
+        <h3>Select a Running Container Template</h3>
         <select id="template-select">
             <option value="" selected>Choose a template...</option>
             <?php foreach ($templates as $name => $command): ?>
                 <option value="<?= htmlspecialchars($command); ?>"><?= htmlspecialchars($name); ?></option>
             <?php endforeach; ?>
         </select>
-        <p>Debug: Found <?= count($templates); ?> running container templates</p>
+        <?php if (empty($templates)): ?>
+            <p><em>No running container templates found. Make sure you have Docker containers running and templates available.</em></p>
+        <?php else: ?>
+            <p>Found <?= count($templates); ?> running container templates.</p>
+        <?php endif; ?>
     </div>
-    <div class="panel">
-        <h2>Compose Preview</h2>
+    
+    <div class="composerize-panel">
+        <h3>Docker Compose Preview</h3>
         <form id="compose-form">
-            <textarea id="compose-text" name="compose" spellcheck="false" placeholder="Select a template to see the Docker Compose preview..."></textarea>
+            <textarea id="compose-text" name="compose" spellcheck="false" placeholder="Select a template above to generate Docker Compose YAML..."></textarea>
             <input type="hidden" id="stack-name" name="name" value="">
+            
             <div id="status-message"></div>
+            
             <div class="button-group">
-                <button type="submit" id="submit-button" disabled>Apply</button>
+                <button type="submit" id="submit-button" disabled>Apply Stack</button>
                 <button type="button" id="undo-button" disabled>Revert Changes</button>
                 <button type="button" id="reset-button">Reset</button>
             </div>
@@ -176,116 +170,105 @@ try {
 
 <script src="<?= htmlspecialchars(PLUGIN_ROOT); ?>/js/composerize.min.js"></script>
 <script>
-document.addEventListener('DOMContentLoaded', () => {
-    console.log('DOM loaded');
-    
-    // Check if composerize function is available
+$(function() {
+    // Wait for both jQuery and composerize to be ready
     if (typeof composerize !== 'function') {
-        console.error('composerize function not found - check if composerize.min.js loaded correctly');
-        document.getElementById('status-message').textContent = 'Error: composerize.min.js not loaded';
-        document.getElementById('status-message').className = 'error';
-        document.getElementById('status-message').style.display = 'block';
+        console.error('composerize function not available');
+        $('#status-message').text('Error: composerize library not loaded').addClass('error').show();
         return;
     }
-    
-    const templateSelect = document.getElementById('template-select');
-    const composeText = document.getElementById('compose-text');
-    const submitButton = document.getElementById('submit-button');
-    const undoButton = document.getElementById('undo-button');
-    const resetButton = document.getElementById('reset-button');
-    const stackNameInput = document.getElementById('stack-name');
-    const form = document.getElementById('compose-form');
-    const statusMessage = document.getElementById('status-message');
-    let originalCompose = '';
 
-    function showStatus(message, type = 'success') {
-        statusMessage.textContent = message;
-        statusMessage.className = type;
-        statusMessage.style.display = 'block';
-        setTimeout(() => { statusMessage.style.display = 'none'; }, 5000);
+    var originalCompose = '';
+    var $templateSelect = $('#template-select');
+    var $composeText = $('#compose-text');
+    var $submitButton = $('#submit-button');
+    var $undoButton = $('#undo-button');
+    var $resetButton = $('#reset-button');
+    var $stackNameInput = $('#stack-name');
+    var $form = $('#compose-form');
+    var $statusMessage = $('#status-message');
+
+    function showStatus(message, type) {
+        type = type || 'success';
+        $statusMessage.removeClass('success error').addClass(type).text(message).show();
+        setTimeout(function() {
+            $statusMessage.fadeOut();
+        }, 5000);
     }
 
     function handleApply(event) {
         event.preventDefault();
-        const name = stackNameInput.value;
-        const compose = composeText.value;
+        var name = $stackNameInput.val();
+        var compose = $composeText.val();
 
         if (!name || !compose) {
             showStatus('Please select a template first.', 'error');
             return;
         }
 
-        submitButton.disabled = true;
-        submitButton.textContent = 'Applying...';
+        $submitButton.prop('disabled', true).text('Applying...');
 
-        const formData = new FormData();
-        formData.append('name', name);
-        formData.append('compose', compose);
-        formData.append('force', 'false');
-
-        fetch("<?= htmlspecialchars(PLUGIN_API_URL); ?>", {
+        $.ajax({
+            url: "<?= htmlspecialchars(PLUGIN_API_URL); ?>",
             method: 'POST',
-            body: formData
+            data: {
+                name: name,
+                compose: compose,
+                force: 'false'
+            },
+            timeout: 30000
         })
-        .then(response => response.text().then(text => ({ ok: response.ok, text })))
-        .then(({ ok, text }) => {
-            if (ok) {
-                showStatus(text, 'success');
-            } else {
-                throw new Error(text);
-            }
+        .done(function(data) {
+            showStatus(data, 'success');
         })
-        .catch(error => {
-            console.error('Error applying compose stack:', error);
-            showStatus(`Error: ${error.message}`, 'error');
+        .fail(function(xhr) {
+            var errorMsg = xhr.responseText || 'Unknown error occurred';
+            console.error('Error applying compose stack:', errorMsg);
+            showStatus('Error: ' + errorMsg, 'error');
         })
-        .finally(() => {
-            submitButton.disabled = false;
-            submitButton.textContent = 'Apply';
+        .always(function() {
+            $submitButton.prop('disabled', false).text('Apply Stack');
         });
     }
-    
-    form.addEventListener('submit', handleApply);
 
-    templateSelect.addEventListener('change', () => {
-        console.log('Template selected');
-        const selectedOption = templateSelect.options[templateSelect.selectedIndex];
-        const command = selectedOption.value;
+    $form.on('submit', handleApply);
+
+    $templateSelect.on('change', function() {
+        var selectedOption = this.options[this.selectedIndex];
+        var command = selectedOption.value;
+        
         if (command) {
             try {
-                console.log('Converting command:', command);
                 originalCompose = composerize(command);
-                composeText.value = originalCompose;
-                stackNameInput.value = selectedOption.text;
-                submitButton.disabled = false;
-                undoButton.disabled = false;
-                console.log('Conversion successful');
+                $composeText.val(originalCompose);
+                $stackNameInput.val(selectedOption.text);
+                $submitButton.prop('disabled', false);
+                $undoButton.prop('disabled', false);
+                $statusMessage.hide();
             } catch (e) {
                 console.error('Conversion error:', e);
-                showStatus(`Error generating compose: ${e.message}`, 'error');
+                showStatus('Error generating compose: ' + e.message, 'error');
                 originalCompose = '';
-                composeText.value = `Could not parse the docker run command for this template.\n\n${command}`;
-                submitButton.disabled = true;
-                undoButton.disabled = true;
+                $composeText.val('Could not parse the docker run command for this template.\n\n' + command);
+                $submitButton.prop('disabled', true);
+                $undoButton.prop('disabled', true);
             }
         } else {
             originalCompose = '';
-            composeText.value = '';
-            stackNameInput.value = '';
-            submitButton.disabled = true;
-            undoButton.disabled = true;
+            $composeText.val('');
+            $stackNameInput.val('');
+            $submitButton.prop('disabled', true);
+            $undoButton.prop('disabled', true);
+            $statusMessage.hide();
         }
     });
 
-    undoButton.addEventListener('click', () => { composeText.value = originalCompose; });
-
-    resetButton.addEventListener('click', () => {
-        templateSelect.selectedIndex = 0;
-        templateSelect.dispatchEvent(new Event('change'));
+    $undoButton.on('click', function() {
+        $composeText.val(originalCompose);
     });
-    
-    console.log('JavaScript initialization complete');
+
+    $resetButton.on('click', function() {
+        $templateSelect.prop('selectedIndex', 0).trigger('change');
+    });
 });
 </script>
-</body>
-</html>
