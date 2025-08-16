@@ -1,4 +1,4 @@
-# Unraid Plugin: Composerize
+# Unraid Plugin: Composerize v3
 
 A simple utility plugin for Unraid to automatically convert your running Docker container templates into Docker Compose stacks. This tool is designed to help you migrate from individual Docker containers managed by Unraid's Docker Manager to a more standardized setup using Docker Compose.
 
