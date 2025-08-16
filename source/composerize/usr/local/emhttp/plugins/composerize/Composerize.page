@@ -140,6 +140,70 @@ select, textarea, button {
     user-select: none;
 }
 
+/* Modal styles */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 1000;
+    display: none;
+}
+
+.modal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: var(--primary-bg, white);
+    border-radius: 8px;
+    padding: 20px;
+    min-width: 500px;
+    max-width: 80%;
+    max-height: 80%;
+    overflow-y: auto;
+    z-index: 1001;
+    border: 2px solid rgba(var(--accent-bg), 0.5);
+}
+
+.modal h4 {
+    margin-top: 0;
+    border-bottom: 1px solid rgba(var(--accent-bg), 0.3);
+    padding-bottom: 10px;
+}
+
+.modal-buttons {
+    text-align: right;
+    margin-top: 20px;
+}
+
+.modal-buttons button {
+    margin-left: 10px;
+    padding: 8px 16px;
+}
+
+.template-option {
+    margin: 10px 0;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background: rgba(var(--accent-bg), 0.1);
+}
+
+.template-option label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+}
+
+.template-option input, .template-option select {
+    width: 100%;
+    padding: 5px;
+    margin-bottom: 5px;
+}
+
 #status-message {
     padding: 10px;
     margin: 10px 0;
@@ -180,6 +244,13 @@ select, textarea, button {
     <div class="composerize-panel">
         <h3>Docker Compose Preview</h3>
         <form id="compose-form">
+            <div style="margin-bottom: 15px;">
+                <button type="button" id="import-button" style="margin-right: 10px; padding: 6px 12px; font-size: 12px;">Import YAML</button>
+                <button type="button" id="export-button" style="margin-right: 10px; padding: 6px 12px; font-size: 12px;">Export YAML</button>
+                <button type="button" id="customize-button" style="padding: 6px 12px; font-size: 12px;">Customize Template</button>
+                <input type="file" id="import-file" accept=".yml,.yaml" style="display: none;">
+            </div>
+            
             <textarea id="compose-text" name="compose" spellcheck="false" placeholder="Select a template above to generate Docker Compose YAML..."></textarea>
             <input type="hidden" id="stack-name" name="name" value="">
             
@@ -206,6 +277,67 @@ select, textarea, button {
     </div>
 </div>
 
+<!-- Template Customization Modal -->
+<div class="modal-overlay" id="customize-modal">
+    <div class="modal">
+        <h4>Customize Template Conversion</h4>
+        <div id="customize-options">
+            <div class="template-option">
+                <label>Default Restart Policy:</label>
+                <select id="restart-policy">
+                    <option value="unless-stopped">unless-stopped</option>
+                    <option value="always">always</option>
+                    <option value="on-failure">on-failure</option>
+                    <option value="no">no</option>
+                </select>
+            </div>
+            
+            <div class="template-option">
+                <label>Docker Compose Version:</label>
+                <select id="compose-version">
+                    <option value="3.8">3.8</option>
+                    <option value="3.9">3.9</option>
+                    <option value="2.4">2.4</option>
+                </select>
+            </div>
+            
+            <div class="template-option">
+                <label>
+                    <input type="checkbox" id="add-logging"> Add logging configuration
+                </label>
+            </div>
+            
+            <div class="template-option">
+                <label>
+                    <input type="checkbox" id="add-healthcheck"> Add healthcheck when possible
+                </label>
+            </div>
+            
+            <div class="template-option">
+                <label>
+                    <input type="checkbox" id="preserve-cap-add"> Preserve security capabilities (--cap-add)
+                </label>
+            </div>
+            
+            <div class="template-option">
+                <label>
+                    <input type="checkbox" id="add-depends-on"> Generate depends_on for linked containers
+                </label>
+            </div>
+            
+            <div class="template-option">
+                <label>Custom network name (leave empty for default):</label>
+                <input type="text" id="custom-network" placeholder="my-network">
+            </div>
+        </div>
+        
+        <div class="modal-buttons">
+            <button type="button" id="save-customization">Save & Apply</button>
+            <button type="button" id="cancel-customization">Cancel</button>
+        </div>
+    </div>
+</div>
+
 <script src="<?= htmlspecialchars(PLUGIN_ROOT); ?>/js/composerize.min.js"></script>
 <script>
 $(function() {
@@ -218,17 +350,31 @@ $(function() {
 
     var originalCompose = '';
     var currentContainerName = '';
+    var customizationSettings = {
+        restartPolicy: 'unless-stopped',
+        composeVersion: '3.8',
+        addLogging: false,
+        addHealthcheck: false,
+        preserveCapAdd: false,
+        addDependsOn: false,
+        customNetwork: ''
+    };
     var $templateSelect = $('#template-select');
     var $composeText = $('#compose-text');
     var $submitButton = $('#submit-button');
     var $removeContainerButton = $('#remove-container-button');
     var $undoButton = $('#undo-button');
     var $resetButton = $('#reset-button');
+    var $importButton = $('#import-button');
+    var $exportButton = $('#export-button');
+    var $customizeButton = $('#customize-button');
+    var $importFile = $('#import-file');
     var $stackNameInput = $('#stack-name');
     var $autoRemove = $('#auto-remove');
     var $forceInstall = $('#force-install');
     var $form = $('#compose-form');
     var $statusMessage = $('#status-message');
+    var $customizeModal = $('#customize-modal');
 
     function showStatus(message, type) {
         type = type || 'success';
@@ -236,6 +382,402 @@ $(function() {
         setTimeout(function() {
             $statusMessage.fadeOut();
         }, 5000);
+    }
+
+    // Enhanced composerize function with customization
+    function enhancedComposerize(dockerRun) {
+        if (!dockerRun || typeof dockerRun !== 'string') {
+            throw new Error('Invalid Docker run command');
+        }
+
+        let command = dockerRun.trim().replace(/^docker\s+run\s+/i, '');
+        const service = { restart: customizationSettings.restartPolicy };
+        
+        // Extract container name
+        let containerName = 'app';
+        const nameMatch = command.match(/--name[=\s]+([^\s]+)/);
+        if (nameMatch) {
+            containerName = nameMatch[1];
+            command = command.replace(/--name[=\s]+[^\s]+/, '');
+        }
+        
+        // Extract image
+        const parts = command.trim().split(/\s+/);
+        const image = parts[parts.length - 1];
+        if (image && !image.startsWith('-')) {
+            service.image = image;
+            command = command.replace(new RegExp('\\s+' + image.replace(/[.*+?^${}()|[\]\\]/g, '\\        }, 5000);
+    }') + '
+
+    function handleApply(event) {
+        event.preventDefault();
+        var name = $stackNameInput.val();
+        var compose = $composeText.val();
+
+        if (!name || !compose) {
+            showStatus('Please select a template first.', 'error');
+            return;
+        }
+
+        $submitButton.prop('disabled', true).text('Processing...');
+
+        // Function to install the stack
+        function installStack() {
+            $.ajax({
+                url: "<?= htmlspecialchars(PLUGIN_API_URL); ?>",
+                method: 'POST',
+                data: {
+                    name: name,
+                    compose: compose,
+                    force: $forceInstall.is(':checked') ? 'true' : 'false'
+                },
+                timeout: 30000
+            })
+            .done(function(data) {
+                showStatus(data, 'success');
+                // Refresh the page to update the template list
+                setTimeout(function() {
+                    location.reload();
+                }, 2000);
+            })
+            .fail(function(xhr) {
+                var errorMsg = xhr.responseText || 'Unknown error occurred';
+                console.error('Error applying compose stack:', errorMsg);
+                showStatus('Error: ' + errorMsg, 'error');
+            })
+            .always(function() {
+                $submitButton.prop('disabled', false).text('Apply Stack');
+            });
+        }
+
+        // Check if we should remove the container first
+        if ($autoRemove.is(':checked') && currentContainerName) {
+            $submitButton.text('Removing Container...');
+            
+            $.ajax({
+                url: "<?= htmlspecialchars(PLUGIN_ROOT); ?>/remove_container.php",
+                method: 'POST',
+                data: {
+                    container_name: currentContainerName
+                },
+                timeout: 30000
+            })
+            .done(function(data) {
+                showStatus('Container removed: ' + data, 'success');
+                // Wait a moment then install the stack
+                setTimeout(installStack, 1000);
+            })
+            .fail(function(xhr) {
+                var errorMsg = xhr.responseText || 'Failed to remove container';
+                console.error('Error removing container:', errorMsg);
+                showStatus('Error removing container: ' + errorMsg, 'error');
+                $submitButton.prop('disabled', false).text('Apply Stack');
+            });
+        } else {
+            // Just install the stack
+            installStack();
+        }
+    }
+
+    function removeContainerOnly() {
+        if (!currentContainerName) {
+            showStatus('No container selected.', 'error');
+            return;
+        }
+
+        if (!confirm('Are you sure you want to remove the container "' + currentContainerName + '"? This cannot be undone.')) {
+            return;
+        }
+
+        $removeContainerButton.prop('disabled', true).text('Removing...');
+
+        $.ajax({
+            url: "<?= htmlspecialchars(PLUGIN_ROOT); ?>/remove_container.php",
+            method: 'POST',
+            data: {
+                container_name: currentContainerName
+            },
+            timeout: 30000
+        })
+        .done(function(data) {
+            showStatus('Container removed: ' + data, 'success');
+            // Refresh the page to update the template list
+            setTimeout(function() {
+                location.reload();
+            }, 2000);
+        })
+        .fail(function(xhr) {
+            var errorMsg = xhr.responseText || 'Unknown error occurred';
+            console.error('Error removing container:', errorMsg);
+            showStatus('Error: ' + errorMsg, 'error');
+        })
+        .always(function() {
+            $removeContainerButton.prop('disabled', false).text('Remove Container Only');
+        });
+    }
+
+    $form.on('submit', handleApply);
+    $removeContainerButton.on('click', removeContainerOnly);
+    $importButton.on('click', importCompose);
+    $exportButton.on('click', exportCompose);
+    $customizeButton.on('click', showCustomizationModal);
+    $importFile.on('change', handleFileImport);
+    
+    // Modal event handlers
+    $('#save-customization').on('click', saveCustomization);
+    $('#cancel-customization').on('click', hideCustomizationModal);
+    $('.modal-overlay').on('click', function(e) {
+        if (e.target === this) {
+            hideCustomizationModal();
+        }
+    });
+
+    $templateSelect.on('change', function() {
+        var selectedOption = this.options[this.selectedIndex];
+        var command = selectedOption.value;
+        
+        if (command) {
+            currentContainerName = selectedOption.text;
+            
+            try {
+                originalCompose = enhancedComposerize(command);
+                $composeText.val(originalCompose);
+                $stackNameInput.val(selectedOption.text);
+                $submitButton.prop('disabled', false);
+                $removeContainerButton.prop('disabled', false);
+                $undoButton.prop('disabled', false);
+                $statusMessage.hide();
+            } catch (e) {
+                console.error('Conversion error:', e);
+                showStatus('Error generating compose: ' + e.message, 'error');
+                originalCompose = '';
+                $composeText.val('Could not parse the docker run command for this template.\n\n' + command);
+                $submitButton.prop('disabled', true);
+                $removeContainerButton.prop('disabled', true);
+                $undoButton.prop('disabled', true);
+            }
+        } else {
+            currentContainerName = '';
+            originalCompose = '';
+            $composeText.val('');
+            $stackNameInput.val('');
+            $submitButton.prop('disabled', true);
+            $removeContainerButton.prop('disabled', true);
+            $undoButton.prop('disabled', true);
+            $statusMessage.hide();
+        }
+    });
+
+    $undoButton.on('click', function() {
+        $composeText.val(originalCompose);
+    });
+
+    $resetButton.on('click', function() {
+        $templateSelect.prop('selectedIndex', 0).trigger('change');
+    });
+});
+</script>), '');
+        }
+        
+        // Extract ports
+        const portMatches = command.match(/-p\s+([^\s]+)/g);
+        if (portMatches) {
+            service.ports = portMatches.map(match => match.replace(/-p\s+/, ''));
+        }
+        
+        // Extract volumes
+        const volumeMatches = command.match(/-v\s+([^\s]+)/g);
+        if (volumeMatches) {
+            service.volumes = volumeMatches.map(match => match.replace(/-v\s+/, ''));
+        }
+        
+        // Extract environment variables
+        const envMatches = command.match(/-e\s+([^\s]+)/g);
+        if (envMatches) {
+            const environment = {};
+            envMatches.forEach(match => {
+                const envVar = match.replace(/-e\s+/, '');
+                if (envVar.includes('=')) {
+                    const [key, ...valueParts] = envVar.split('=');
+                    environment[key] = valueParts.join('=');
+                }
+            });
+            if (Object.keys(environment).length > 0) {
+                service.environment = environment;
+            }
+        }
+        
+        // Check for privileged mode
+        if (command.includes('--privileged')) {
+            service.privileged = true;
+        }
+        
+        // Extract restart policy (can be overridden by customization)
+        const restartMatch = command.match(/--restart[=\s]+([^\s]+)/);
+        if (restartMatch && customizationSettings.restartPolicy === 'unless-stopped') {
+            service.restart = restartMatch[1];
+        }
+        
+        // Extract network
+        let networkName = null;
+        const networkMatch = command.match(/--network[=\s]+([^\s]+)/);
+        if (networkMatch) {
+            networkName = networkMatch[1];
+        } else if (customizationSettings.customNetwork) {
+            networkName = customizationSettings.customNetwork;
+        }
+        
+        if (networkName && networkName !== 'bridge') {
+            service.networks = [networkName];
+        }
+        
+        // Add logging if requested
+        if (customizationSettings.addLogging) {
+            service.logging = {
+                driver: 'json-file',
+                options: {
+                    'max-size': '10m',
+                    'max-file': '3'
+                }
+            };
+        }
+        
+        // Add basic healthcheck if requested and it's a web service
+        if (customizationSettings.addHealthcheck && service.ports) {
+            const hasWebPort = service.ports.some(port => port.includes(':80') || port.includes(':443') || port.includes(':8080'));
+            if (hasWebPort) {
+                service.healthcheck = {
+                    test: ['CMD', 'wget', '--quiet', '--tries=1', '--spider', 'http://localhost:80', '||', 'exit', '1'],
+                    interval: '30s',
+                    timeout: '10s',
+                    retries: 3
+                };
+            }
+        }
+        
+        // Preserve capabilities
+        if (customizationSettings.preserveCapAdd) {
+            const capAddMatch = command.match(/--cap-add[=\s]+([^\s]+)/g);
+            if (capAddMatch) {
+                service.cap_add = capAddMatch.map(match => match.replace(/--cap-add[=\s]+/, ''));
+            }
+        }
+        
+        // Build compose structure
+        const compose = {
+            version: customizationSettings.composeVersion,
+            services: {}
+        };
+        compose.services[containerName] = service;
+        
+        // Add networks section if needed
+        if (networkName && networkName !== 'bridge' && customizationSettings.customNetwork) {
+            compose.networks = {};
+            compose.networks[networkName] = {
+                external: false
+            };
+        }
+        
+        return objectToYaml(compose);
+    }
+
+    // Export functionality
+    function exportCompose() {
+        const compose = $composeText.val();
+        if (!compose) {
+            showStatus('No compose content to export.', 'error');
+            return;
+        }
+        
+        const stackName = $stackNameInput.val() || 'docker-compose';
+        const blob = new Blob([compose], { type: 'text/yaml' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = stackName + '.yml';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        showStatus('Compose file exported successfully!', 'success');
+    }
+
+    // Import functionality
+    function importCompose() {
+        $importFile.click();
+    }
+
+    function handleFileImport(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        
+        if (!file.name.match(/\.(yml|yaml)$/i)) {
+            showStatus('Please select a YAML file (.yml or .yaml)', 'error');
+            return;
+        }
+        
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const content = e.target.result;
+            $composeText.val(content);
+            
+            // Try to extract service name for stack name
+            const serviceMatch = content.match(/services:\s*\n\s*([^:\n]+):/);
+            if (serviceMatch) {
+                $stackNameInput.val(serviceMatch[1]);
+            }
+            
+            $submitButton.prop('disabled', false);
+            showStatus('Compose file imported successfully!', 'success');
+        };
+        reader.readAsText(file);
+        
+        // Reset file input
+        event.target.value = '';
+    }
+
+    // Customization modal functions
+    function showCustomizationModal() {
+        // Populate current settings
+        $('#restart-policy').val(customizationSettings.restartPolicy);
+        $('#compose-version').val(customizationSettings.composeVersion);
+        $('#add-logging').prop('checked', customizationSettings.addLogging);
+        $('#add-healthcheck').prop('checked', customizationSettings.addHealthcheck);
+        $('#preserve-cap-add').prop('checked', customizationSettings.preserveCapAdd);
+        $('#add-depends-on').prop('checked', customizationSettings.addDependsOn);
+        $('#custom-network').val(customizationSettings.customNetwork);
+        
+        $customizeModal.show();
+    }
+
+    function hideCustomizationModal() {
+        $customizeModal.hide();
+    }
+
+    function saveCustomization() {
+        customizationSettings.restartPolicy = $('#restart-policy').val();
+        customizationSettings.composeVersion = $('#compose-version').val();
+        customizationSettings.addLogging = $('#add-logging').is(':checked');
+        customizationSettings.addHealthcheck = $('#add-healthcheck').is(':checked');
+        customizationSettings.preserveCapAdd = $('#preserve-cap-add').is(':checked');
+        customizationSettings.addDependsOn = $('#add-depends-on').is(':checked');
+        customizationSettings.customNetwork = $('#custom-network').val().trim();
+        
+        hideCustomizationModal();
+        showStatus('Template customization saved!', 'success');
+        
+        // Re-generate compose if there's a selected template
+        if (currentContainerName && $templateSelect.val()) {
+            const command = $templateSelect.val();
+            try {
+                const newCompose = enhancedComposerize(command);
+                $composeText.val(newCompose);
+                originalCompose = newCompose;
+            } catch (e) {
+                console.error('Re-generation error:', e);
+            }
+        }
     }
 
     function handleApply(event) {
