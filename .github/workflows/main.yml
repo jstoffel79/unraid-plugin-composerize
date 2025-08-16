@@ -51,7 +51,7 @@ jobs:
           git add plugin/composerize.plg
           # Only commit and push if there are actual changes to the file
           if ! git diff-index --quiet HEAD; then
-            git commit -m "ci: Build and update plugin file [skip ci]"
+            git commit -m "ci: V3 Release"
             # Stash any other potential changes, pull with rebase, then re-apply.
             # This prevents errors if the working directory is not perfectly clean.
             git stash
