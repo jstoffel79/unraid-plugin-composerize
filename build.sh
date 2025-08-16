@@ -4,6 +4,7 @@
 # It automatically packages the source, calculates the MD5 hash,
 # and updates the .plg file with the new version and hash.
 
+
 # --- Configuration ---
 set -euo pipefail
 
