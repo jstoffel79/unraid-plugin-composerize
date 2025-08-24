@@ -9,7 +9,21 @@ require_once '/usr/local/emhttp/plugins/dynamix.docker.manager/include/DockerCli
 require_once '/usr/local/emhttp/plugins/dynamix.docker.manager/include/Helpers.php';
 
 /**
+ * Helper to quote a value for a command line argument if it contains spaces.
+ */
+function quoteValue(string $value): string
+{
+    // If the value contains spaces and is not already quoted, wrap it in double quotes.
+    if (strpos($value, ' ') !== false && substr($value, 0, 1) !== '"') {
+        return '"' . $value . '"';
+    }
+    return $value;
+}
+
+
+/**
  * Manually parses a Docker template XML and builds a 'docker run' command.
+ * This version avoids escapeshellarg() to be compatible with the composerize JS library.
  */
 function buildDockerRunCommand(SimpleXMLElement $xml): ?string
 {
@@ -18,10 +32,10 @@ function buildDockerRunCommand(SimpleXMLElement $xml): ?string
     }
 
     $command = ['docker run'];
-    $command[] = '--name=' . escapeshellarg((string)$xml->Name);
+    $command[] = '--name=' . quoteValue((string)$xml->Name);
 
     if (isset($xml->Network) && (string)$xml->Network !== 'bridge') {
-        $command[] = '--net=' . escapeshellarg((string)$xml->Network);
+        $command[] = '--net=' . quoteValue((string)$xml->Network);
     }
 
     if (isset($xml->Privileged) && strtolower((string)$xml->Privileged) === 'true') {
@@ -47,7 +61,7 @@ function buildDockerRunCommand(SimpleXMLElement $xml): ?string
                     $hostPort = $value;
                     $containerPort = (string)$attributes['Target'];
                     if (!empty($hostPort) && !empty($containerPort)) {
-                        $command[] = '-p ' . escapeshellarg($hostPort . ':' . $containerPort);
+                        $command[] = '-p ' . quoteValue($hostPort . ':' . $containerPort);
                     }
                     break;
 
@@ -55,21 +69,21 @@ function buildDockerRunCommand(SimpleXMLElement $xml): ?string
                     $hostPath = $value;
                     $containerPath = (string)$attributes['Target'];
                     if (!empty($hostPath) && !empty($containerPath)) {
-                        $command[] = '-v ' . escapeshellarg($hostPath . ':' . $containerPath);
+                        $command[] = '-v ' . quoteValue($hostPath . ':' . $containerPath);
                     }
                     break;
                 
                 case 'Variable':
                     $name = (string)$attributes['Target'];
                     if (isset($name) && $value !== '') {
-                        $command[] = '-e ' . escapeshellarg($name . '=' . $value);
+                        $command[] = '-e ' . quoteValue($name . '=' . $value);
                     }
                     break;
             }
         }
     }
 
-    $command[] = escapeshellarg((string)$xml->Repository);
+    $command[] = quoteValue((string)$xml->Repository);
     
     return implode(' ', array_filter($command));
 }
