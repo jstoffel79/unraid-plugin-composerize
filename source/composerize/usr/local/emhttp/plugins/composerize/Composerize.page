@@ -19,7 +19,7 @@ if (empty($_SESSION['csrf'])) {
 // Suppress errors and try to include
 $templates = [];
 try {
-    @require_once '/usr/local/emhttp' . PLUGIN_ROOT . '/include/composerize.php';
+    @require_once __DIR__ . '/include/composerize.php';
     if (function_exists('getDockerTemplateList')) {
         $templates = getDockerTemplateList();
     }
@@ -98,6 +98,9 @@ textarea {
 #submit-button { background: #4a90e2; }
 #submit-button:hover:not(:disabled) { background: #357abd; }
 #submit-button:disabled { background: #777; cursor: not-allowed; }
+
+#validate-button { background: #50e3c2; }
+#validate-button:hover:not(:disabled) { background: #42bda0; }
 
 #remove-container-button { background: #d0021b; }
 #remove-container-button:hover:not(:disabled) { background: #b8021a; }
@@ -225,6 +228,7 @@ textarea {
             
             <div class="button-group">
                 <button type="submit" id="submit-button" disabled>Apply Stack</button>
+                <button type="button" id="validate-button" disabled>Validate Only</button>
                 <button type="button" id="remove-container-button" disabled>Remove Container Only</button>
                 <button type="button" id="undo-button" disabled>Revert Changes</button>
                 <button type="button" id="reset-button">Reset</button>
@@ -304,6 +308,7 @@ $(function() {
     const $templateSelect = $('#template-select');
     const $composeText = $('#compose-text');
     const $submitButton = $('#submit-button');
+    const $validateButton = $('#validate-button');
     const $removeContainerButton = $('#remove-container-button');
     const $undoButton = $('#undo-button');
     const $resetButton = $('#reset-button');
@@ -323,22 +328,11 @@ $(function() {
 
     // --- CORE FUNCTIONS ---
 
-    /**
-     * Shows a status message that fades out after 5 seconds.
-     * @param {string} message The message to display.
-     * @param {string} type 'success' or 'error'.
-     */
     function showStatus(message, type = 'success') {
         $statusMessage.removeClass('success error').addClass(type).text(message).fadeIn();
         setTimeout(() => $statusMessage.fadeOut(), 5000);
     }
     
-    /**
-     * Shows a confirmation modal.
-     * @param {string} title The title of the modal.
-     * @param {string} text The confirmation message.
-     * @returns {Promise<boolean>} A promise that resolves to true if confirmed, false otherwise.
-     */
     function showConfirm(title, text) {
         return new Promise(resolve => {
             $('#confirm-title').text(title);
@@ -356,12 +350,6 @@ $(function() {
         });
     }
 
-    /**
-     * Converts a docker run command to a Docker Compose YAML string.
-     * @param {string} dockerRun The full 'docker run ...' command.
-     * @param {string} containerName The desired name for the service and container.
-     * @returns {string} The generated YAML string.
-     */
     function generateCompose(dockerRun, containerName) {
         if (!dockerRun || typeof dockerRun !== 'string') {
             throw new Error('Invalid Docker run command provided.');
@@ -370,12 +358,8 @@ $(function() {
             throw new Error('Container name must be provided.');
         }
         
-        let commandToParse = dockerRun;
-
-        // --- Sanitize command for better parsing ---
-        // 1. Normalize all forms of --flag='value' or -f='value' to --flag "value"
-        commandToParse = commandToParse.replace(/(-{1,2}[a-zA-Z0-9\.-]+)='([^']*)'/g, '$1 "$2"');
-        // 2. Unquote the image name if it's at the very end of the command
+        // FIX: Sanitize the command string before passing to the composerize library.
+        let commandToParse = dockerRun.replace(/(-{1,2}[a-zA-Z0-9\.-]+)='([^']*)'/g, '$1 "$2"');
         commandToParse = commandToParse.replace(/ '([^' ]*)'$/, ' $1');
 
         const hasNoHealthcheck = commandToParse.includes('--no-healthcheck');
@@ -383,62 +367,35 @@ $(function() {
             commandToParse = commandToParse.replace(/--no-healthcheck/g, '').trim();
         }
 
-        // Use the external composerize library for the base conversion
         let composeObj = composerize(commandToParse);
         
-        // --- Add validation to prevent crash on parsing failure ---
         if (!composeObj || !composeObj.services || typeof composeObj.services !== 'object' || Object.keys(composeObj.services).length === 0) {
             throw new Error('The composerize library failed to parse the Docker command. Please check for unusual characters or formatting in the template.');
         }
 
-        // Get the original service name and the service object
         const originalServiceName = Object.keys(composeObj.services)[0];
         const service = composeObj.services[originalServiceName];
 
-        // --- RENAME SERVICE and SET CONTAINER NAME ---
         if (originalServiceName !== containerName) {
             delete composeObj.services[originalServiceName];
             composeObj.services[containerName] = service;
         }
         service.container_name = containerName;
 
-        // --- APPLY CUSTOMIZATIONS ---
-        
-        // If --no-healthcheck was present, add the correct YAML equivalent
-        if (hasNoHealthcheck) {
-            service.healthcheck = {
-                disable: true
-            };
-        }
-        
-        if (!service.restart) {
-            service.restart = customizationSettings.restartPolicy;
-        }
+        if (hasNoHealthcheck) service.healthcheck = { disable: true };
+        if (!service.restart) service.restart = customizationSettings.restartPolicy;
         
         if (customizationSettings.addLogging) {
-            service.logging = {
-                driver: 'json-file',
-                options: {
-                    'max-size': '10m',
-                    'max-file': '3'
-                }
-            };
+            service.logging = { driver: 'json-file', options: { 'max-size': '10m', 'max-file': '3' } };
         }
         
-        if (customizationSettings.customNetwork) {
-            service.networks = [customizationSettings.customNetwork];
-        }
+        if (customizationSettings.customNetwork) service.networks = [customizationSettings.customNetwork];
 
         if (service.networks && service.networks.length > 0) {
             const networkName = service.networks[0];
-            composeObj.networks = {
-                [networkName]: {
-                    external: true
-                }
-            };
+            composeObj.networks = { [networkName]: { external: true } };
         }
         
-        // Handle environment variables that might be arrays (e.g., from -e VAR)
         if (service.environment && Array.isArray(service.environment)) {
             const envObj = {};
             service.environment.forEach(env => {
@@ -451,16 +408,10 @@ $(function() {
         }
         
         delete composeObj.version;
-
         return objectToYaml(composeObj);
     }
 
-    /**
-     * Converts a JavaScript object to a YAML string with correct indentation.
-     * @param {object} obj The object to convert.
-     * @param {number} indent The current indentation level.
-     * @returns {string} The formatted YAML string.
-     */
+    // Type-safe YAML emitter
     function objectToYaml(obj, indent = 0) {
         let yaml = '';
         const spaces = '  '.repeat(indent);
@@ -473,15 +424,17 @@ $(function() {
                 if (Array.isArray(value)) {
                     yaml += `${spaces}${key}:\n`;
                     value.forEach(item => {
-                        yaml += `${spaces}  - "${String(item).replace(/"/g, '\\"')}"\n`;
+                        yaml += `${spaces}  - ${typeof item === 'string' ? `"${String(item).replace(/"/g, '\\"')}"` : item}\n`;
                     });
                 } else if (typeof value === 'object') {
                     yaml += `${spaces}${key}:\n`;
                     yaml += objectToYaml(value, indent + 1);
                 } else {
-                    const stringValue = String(value);
-                    const needsQuotes = /[:\s!@#$%^&*()\[\]{}\\/|]/.test(stringValue) || /^\d+$/.test(stringValue) || /^(true|false|yes|no|null)$/i.test(stringValue);
-                    const formattedValue = needsQuotes ? `'${stringValue.replace(/'/g, "''")}'` : stringValue;
+                    let formattedValue = value;
+                    if (typeof value === 'string') {
+                        const needsQuotes = /[:\s!@#$%^&*()\[\]{}\\/|]/.test(value) || /^\d+$/.test(value) || /^(true|false|yes|no|null)$/i.test(value);
+                        formattedValue = needsQuotes ? `'${value.replace(/'/g, "''")}'` : value;
+                    }
                     yaml += `${spaces}${key}: ${formattedValue}\n`;
                 }
             }
@@ -490,122 +443,97 @@ $(function() {
     }
 
     // --- SETTINGS PERSISTENCE ---
-
     function saveSettings() {
-        try {
-            localStorage.setItem(SETTINGS_KEY, JSON.stringify(customizationSettings));
-        } catch (e) {
-            console.error("Could not save settings to localStorage.", e);
-        }
+        try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(customizationSettings)); } 
+        catch (e) { console.error("Could not save settings to localStorage.", e); }
     }
 
     function loadSettings() {
         try {
             const savedSettings = localStorage.getItem(SETTINGS_KEY);
-            if (savedSettings) {
-                customizationSettings = { ...customizationSettings, ...JSON.parse(savedSettings) };
-            }
+            if (savedSettings) customizationSettings = { ...customizationSettings, ...JSON.parse(savedSettings) };
         } catch (e) {
             console.error("Could not load settings from localStorage.", e);
         }
     }
 
     // --- EVENT HANDLERS ---
-
     function handleTemplateChange() {
         const selectedOption = this.options[this.selectedIndex];
         const command = selectedOption.value;
         
         if (command) {
             currentContainerName = selectedOption.text;
-            
             try {
                 originalCompose = generateCompose(command, currentContainerName);
                 $composeText.val(originalCompose);
                 $stackNameInput.val(currentContainerName);
-                $submitButton.prop('disabled', false);
-                $removeContainerButton.prop('disabled', false);
-                $undoButton.prop('disabled', false);
+                $submitButton.add($removeContainerButton).add($undoButton).add($validateButton).prop('disabled', false);
                 $statusMessage.hide();
             } catch (e) {
                 console.error('Conversion error:', e);
                 showStatus('Error generating compose: ' + e.message, 'error');
                 originalCompose = '';
                 $composeText.val(`Could not parse the docker run command.\n\nError: ${e.message}\n\nCommand: ${command}`);
-                $submitButton.prop('disabled', true);
-                $removeContainerButton.prop('disabled', true);
-                $undoButton.prop('disabled', true);
+                $submitButton.add($removeContainerButton).add($undoButton).add($validateButton).prop('disabled', true);
             }
         } else {
-            // Reset UI when "Choose a template..." is selected
-            currentContainerName = '';
-            originalCompose = '';
+            currentContainerName = originalCompose = '';
             $composeText.val('');
             $stackNameInput.val('');
-            $submitButton.prop('disabled', true);
-            $removeContainerButton.prop('disabled', true);
-            $undoButton.prop('disabled', true);
+            $submitButton.add($removeContainerButton).add($undoButton).add($validateButton).prop('disabled', true);
             $statusMessage.hide();
         }
     }
 
-    async function handleApply(event) {
+    function handleApiAction(action, button, data) {
+        button.prop('disabled', true).text('Processing...');
+        $.ajax({
+            url: "<?= htmlspecialchars(PLUGIN_API_URL); ?>",
+            method: 'POST',
+            data: { ...data, action: action, csrf: $('#csrf').val() },
+            timeout: 60000
+        })
+        .done(response => {
+            showStatus(response, 'success');
+            if (action === 'install') setTimeout(() => location.reload(), 2000);
+        })
+        .fail(xhr => showStatus('Error: ' + (xhr.responseText || 'Unknown error'), 'error'))
+        .always(() => button.prop('disabled', false).text(button.data('original-text')));
+    }
+
+    function handleApply(event) {
         event.preventDefault();
         const name = $stackNameInput.val();
         const compose = $composeText.val();
-
-        if (!name || !compose) {
-            showStatus('Please select a template first.', 'error');
-            return;
-        }
-
-        $submitButton.prop('disabled', true).text('Processing...');
-
-        const installStack = () => {
-            $.ajax({
-                url: "<?= htmlspecialchars(PLUGIN_API_URL); ?>",
-                method: 'POST',
-                data: { name, compose, force: $forceInstall.is(':checked') ? 'true' : 'false', csrf: $('#csrf').val() },
-                timeout: 60000
-            })
-            .done(data => {
-                showStatus(data, 'success');
-                setTimeout(() => location.reload(), 2000);
-            })
-            .fail(xhr => showStatus('Error: ' + (xhr.responseText || 'Unknown error'), 'error'))
-            .always(() => $submitButton.prop('disabled', false).text('Apply Stack'));
-        };
+        if (!name || !compose) return showStatus('Please select a template first.', 'error');
+        
+        const installStack = () => handleApiAction('install', $submitButton, { name, compose, force: $forceInstall.is(':checked') });
 
         if ($autoRemove.is(':checked') && currentContainerName) {
             $submitButton.text('Removing Container...');
-            try {
-                const response = await $.ajax({
-                    url: "<?= htmlspecialchars(PLUGIN_ROOT); ?>/remove_container.php",
-                    method: 'POST',
-                    data: { container_name: currentContainerName },
-                    timeout: 30000
-                });
+            $.ajax({
+                url: "<?= htmlspecialchars(PLUGIN_ROOT); ?>/remove_container.php",
+                method: 'POST',
+                data: { container_name: currentContainerName, csrf: $('#csrf').val() },
+                timeout: 30000
+            })
+            .done(response => {
                 showStatus('Container removed: ' + response, 'success');
                 setTimeout(installStack, 1000);
-            } catch (xhr) {
+            })
+            .fail(xhr => {
                 showStatus('Error removing container: ' + (xhr.responseText || 'Failed'), 'error');
                 $submitButton.prop('disabled', false).text('Apply Stack');
-            }
+            });
         } else {
             installStack();
         }
     }
 
     async function removeContainerOnly() {
-        if (!currentContainerName) {
-            showStatus('No container selected.', 'error');
-            return;
-        }
-
-        const confirmed = await showConfirm(
-            'Confirm Removal', 
-            `Are you sure you want to permanently remove the container "${currentContainerName}"?`
-        );
+        if (!currentContainerName) return showStatus('No container selected.', 'error');
+        const confirmed = await showConfirm('Confirm Removal', `Are you sure you want to permanently remove the container "${currentContainerName}"?`);
         if (!confirmed) return;
 
         $removeContainerButton.prop('disabled', true).text('Removing...');
@@ -613,7 +541,7 @@ $(function() {
             const data = await $.ajax({
                 url: "<?= htmlspecialchars(PLUGIN_ROOT); ?>/remove_container.php",
                 method: 'POST',
-                data: { container_name: currentContainerName },
+                data: { container_name: currentContainerName, csrf: $('#csrf').val() },
                 timeout: 30000
             });
             showStatus('Container removed: ' + data, 'success');
@@ -626,7 +554,6 @@ $(function() {
     }
     
     // --- CUSTOMIZATION MODAL ---
-
     function showCustomizationModal() {
         $('#restart-policy').val(customizationSettings.restartPolicy);
         $('#add-logging').prop('checked', customizationSettings.addLogging);
@@ -642,19 +569,16 @@ $(function() {
         customizationSettings.restartPolicy = $('#restart-policy').val();
         customizationSettings.addLogging = $('#add-logging').is(':checked');
         customizationSettings.customNetwork = $('#custom-network').val().trim();
-        
-        saveSettings(); // Persist settings
+        saveSettings();
         hideCustomizationModal();
         showStatus('Customization saved!', 'success');
-        
-        // Re-generate compose if a template is selected
-        if ($templateSelect.val()) {
-            handleTemplateChange.call($templateSelect[0]);
-        }
+        if ($templateSelect.val()) handleTemplateChange.call($templateSelect[0]);
     }
 
     // --- INITIALIZATION ---
-    loadSettings(); // Load saved settings on page load
+    loadSettings();
+    $submitButton.data('original-text', $submitButton.text());
+    $validateButton.data('original-text', $validateButton.text());
 
     // --- EVENT BINDING ---
     $form.on('submit', handleApply);
@@ -662,6 +586,7 @@ $(function() {
     $removeContainerButton.on('click', removeContainerOnly);
     $undoButton.on('click', () => $composeText.val(originalCompose));
     $resetButton.on('click', () => $templateSelect.prop('selectedIndex', 0).trigger('change'));
+    $validateButton.on('click', () => handleApiAction('validate', $validateButton, { compose: $composeText.val() }));
     
     // Customization Modal
     $customizeButton.on('click', showCustomizationModal);
