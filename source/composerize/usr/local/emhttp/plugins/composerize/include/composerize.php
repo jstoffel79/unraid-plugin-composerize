@@ -9,23 +9,8 @@ require_once '/usr/local/emhttp/plugins/dynamix.docker.manager/include/DockerCli
 require_once '/usr/local/emhttp/plugins/dynamix.docker.manager/include/Helpers.php';
 
 /**
- * Helper to quote a value for a command line argument if it contains spaces.
- */
-function quoteValue(string $value): string
-{
-    $trimmedValue = trim($value);
-    // If the value contains spaces and is not already quoted, wrap it in double quotes.
-    if (strpos($trimmedValue, ' ') !== false && substr($trimmedValue, 0, 1) !== '"' && substr($trimmedValue, 0, 1) !== "'") {
-        return '"' . $trimmedValue . '"';
-    }
-    return $trimmedValue;
-}
-
-
-/**
  * Manually parses a Docker template XML and builds a 'docker run' command.
- * This version is more robust, trimming all inputs and separating ALL flags from values
- * to ensure compatibility with the composerize JS library.
+ * This version uses escapeshellarg() for security and compatibility.
  */
 function buildDockerRunCommand(SimpleXMLElement $xml): ?string
 {
@@ -33,35 +18,31 @@ function buildDockerRunCommand(SimpleXMLElement $xml): ?string
         return null;
     }
 
-    $command = ['docker run'];
+    $parts = ['docker run'];
     
-    $command[] = '--name';
-    $command[] = quoteValue((string)$xml->Name);
+    // Add detached mode by default
+    $parts[] = '-d';
 
-    // Per user request, commented out custom network handling to default all containers to the 'bridge' network.
-    // This prevents issues with the composerize library and external networks.
-    /*
+    // Container name
+    $name = trim((string)$xml->Name);
+    if (!empty($name)) {
+        $parts[] = '--name ' . escapeshellarg($name);
+    }
+
+    // Network
     if (isset($xml->Network) && (string)$xml->Network !== 'bridge') {
-        $command[] = '--net';
-        $command[] = quoteValue((string)$xml->Network);
-    }
-    */
-
-    if (isset($xml->Privileged) && strtolower(trim((string)$xml->Privileged)) === 'true') {
-        $command[] = '--privileged';
-    }
-    
-    if (isset($xml->ExtraParams)) {
-        $extra = trim((string)$xml->ExtraParams);
-        if (!empty($extra)) {
-            // Split extra params by space to treat them as individual arguments
-            $extra_parts = preg_split('/\s+/', $extra);
-            foreach ($extra_parts as $part) {
-                $command[] = $part;
-            }
+        $network = trim((string)$xml->Network);
+        if (!empty($network)) {
+            $parts[] = '--net ' . escapeshellarg($network);
         }
     }
 
+    // Privileged
+    if (isset($xml->Privileged) && strtolower(trim((string)$xml->Privileged)) === 'true') {
+        $parts[] = '--privileged';
+    }
+
+    // Process Config elements
     if (isset($xml->Config)) {
         foreach ($xml->Config as $config) {
             $attributes = $config->attributes();
@@ -79,8 +60,7 @@ function buildDockerRunCommand(SimpleXMLElement $xml): ?string
                     $hostPort = $value;
                     $containerPort = trim((string)$attributes['Target']);
                     if (!empty($hostPort) && !empty($containerPort)) {
-                        $command[] = '-p';
-                        $command[] = quoteValue($hostPort . ':' . $containerPort);
+                        $parts[] = '-p ' . escapeshellarg($hostPort . ':' . $containerPort);
                     }
                     break;
 
@@ -88,29 +68,35 @@ function buildDockerRunCommand(SimpleXMLElement $xml): ?string
                     $hostPath = $value;
                     $containerPath = trim((string)$attributes['Target']);
                     if (!empty($hostPath) && !empty($containerPath)) {
-                        $command[] = '-v';
-                        $command[] = quoteValue($hostPath . ':' . $containerPath);
+                        $parts[] = '-v ' . escapeshellarg($hostPath . ':' . $containerPath);
                     }
                     break;
                 
                 case 'Variable':
-                    $name = trim((string)$attributes['Target']);
-                    if (!empty($name)) {
-                        $command[] = '-e';
-                        $command[] = quoteValue($name . '=' . $value);
+                    $nameAttr = trim((string)$attributes['Target']);
+                    if (!empty($nameAttr)) {
+                        $parts[] = '-e ' . escapeshellarg($nameAttr . '=' . $value);
                     }
                     break;
             }
         }
     }
 
-    $command[] = quoteValue((string)$xml->Repository);
-    
-    $filteredCommand = array_filter($command, function($part) {
-        return trim($part) !== '';
-    });
+    // Extra parameters
+    if (isset($xml->ExtraParams)) {
+        $extra = trim((string)$xml->ExtraParams);
+        if (!empty($extra)) {
+            $parts[] = $extra;
+        }
+    }
 
-    return implode(' ', $filteredCommand);
+    // Repository/image
+    $repository = trim((string)$xml->Repository);
+    if (!empty($repository)) {
+        $parts[] = escapeshellarg($repository);
+    }
+
+    return implode(' ', $parts);
 }
 
 
