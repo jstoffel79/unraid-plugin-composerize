@@ -13,18 +13,20 @@ require_once '/usr/local/emhttp/plugins/dynamix.docker.manager/include/Helpers.p
  */
 function quoteValue(string $value): string
 {
+    // Trim the value first to handle extraneous whitespace.
+    $trimmedValue = trim($value);
     // If the value contains spaces and is not already quoted, wrap it in double quotes.
-    if (strpos($value, ' ') !== false && substr($value, 0, 1) !== '"' && substr($value, 0, 1) !== "'") {
-        return '"' . $value . '"';
+    if (strpos($trimmedValue, ' ') !== false && substr($trimmedValue, 0, 1) !== '"' && substr($trimmedValue, 0, 1) !== "'") {
+        return '"' . $trimmedValue . '"';
     }
-    return $value;
+    return $trimmedValue;
 }
 
 
 /**
  * Manually parses a Docker template XML and builds a 'docker run' command.
- * This version avoids escapeshellarg() and correctly separates flags from their values
- * to be compatible with the composerize JS library.
+ * This version is more robust, trimming all inputs and separating flags from values
+ * to ensure compatibility with the composerize JS library.
  */
 function buildDockerRunCommand(SimpleXMLElement $xml): ?string
 {
@@ -39,30 +41,35 @@ function buildDockerRunCommand(SimpleXMLElement $xml): ?string
         $command[] = '--net=' . quoteValue((string)$xml->Network);
     }
 
-    if (isset($xml->Privileged) && strtolower((string)$xml->Privileged) === 'true') {
+    if (isset($xml->Privileged) && strtolower(trim((string)$xml->Privileged)) === 'true') {
         $command[] = '--privileged';
     }
     
     if (isset($xml->ExtraParams)) {
-        $command[] = (string)$xml->ExtraParams;
+        $extra = trim((string)$xml->ExtraParams);
+        if (!empty($extra)) {
+            $command[] = $extra;
+        }
     }
 
     if (isset($xml->Config)) {
         foreach ($xml->Config as $config) {
             $attributes = $config->attributes();
-            $type = isset($attributes['Type']) ? (string)$attributes['Type'] : '';
-            $value = (string)$config;
+            $type = isset($attributes['Type']) ? trim((string)$attributes['Type']) : '';
+            $value = trim((string)$config);
 
             if ($value === '' && isset($attributes['Default'])) {
-                $value = (string)$attributes['Default'];
+                $value = trim((string)$attributes['Default']);
             }
+            
+            // Skip any parameters that are ultimately empty.
+            if ($value === '') continue;
 
             switch ($type) {
                 case 'Port':
                     $hostPort = $value;
-                    $containerPort = (string)$attributes['Target'];
+                    $containerPort = trim((string)$attributes['Target']);
                     if (!empty($hostPort) && !empty($containerPort)) {
-                        // FIX: Separate the flag from its value
                         $command[] = '-p';
                         $command[] = quoteValue($hostPort . ':' . $containerPort);
                     }
@@ -70,18 +77,16 @@ function buildDockerRunCommand(SimpleXMLElement $xml): ?string
 
                 case 'Path':
                     $hostPath = $value;
-                    $containerPath = (string)$attributes['Target'];
+                    $containerPath = trim((string)$attributes['Target']);
                     if (!empty($hostPath) && !empty($containerPath)) {
-                        // FIX: Separate the flag from its value
                         $command[] = '-v';
                         $command[] = quoteValue($hostPath . ':' . $containerPath);
                     }
                     break;
                 
                 case 'Variable':
-                    $name = (string)$attributes['Target'];
-                    if (isset($name) && $value !== '') {
-                        // FIX: Separate the flag from its value
+                    $name = trim((string)$attributes['Target']);
+                    if (!empty($name)) {
                         $command[] = '-e';
                         $command[] = quoteValue($name . '=' . $value);
                     }
@@ -92,7 +97,12 @@ function buildDockerRunCommand(SimpleXMLElement $xml): ?string
 
     $command[] = quoteValue((string)$xml->Repository);
     
-    return implode(' ', array_filter($command));
+    // Filter out any empty elements that might have crept in before joining.
+    $filteredCommand = array_filter($command, function($part) {
+        return trim($part) !== '';
+    });
+
+    return implode(' ', $filteredCommand);
 }
 
 
