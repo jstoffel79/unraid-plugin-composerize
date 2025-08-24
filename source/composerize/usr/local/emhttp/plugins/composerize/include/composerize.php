@@ -14,7 +14,7 @@ require_once '/usr/local/emhttp/plugins/dynamix.docker.manager/include/Helpers.p
 function quoteValue(string $value): string
 {
     // If the value contains spaces and is not already quoted, wrap it in double quotes.
-    if (strpos($value, ' ') !== false && substr($value, 0, 1) !== '"') {
+    if (strpos($value, ' ') !== false && substr($value, 0, 1) !== '"' && substr($value, 0, 1) !== "'") {
         return '"' . $value . '"';
     }
     return $value;
@@ -32,6 +32,7 @@ function buildDockerRunCommand(SimpleXMLElement $xml): ?string
     }
 
     $command = ['docker run'];
+    // Replaced all escapeshellarg() calls with quoteValue()
     $command[] = '--name=' . quoteValue((string)$xml->Name);
 
     if (isset($xml->Network) && (string)$xml->Network !== 'bridge') {
