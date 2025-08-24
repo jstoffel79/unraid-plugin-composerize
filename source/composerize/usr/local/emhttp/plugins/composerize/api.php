@@ -5,8 +5,12 @@
  */
 
 // --- Dependencies ---
-// Use a relative path for reliability.
 require_once __DIR__ . '/include/api_helpers.php';
+session_start();
+// Basic CSRF protection
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!hash_equals($_SESSION['csrf'] ?? '', $_POST['csrf'] ?? '')) { http_response_code(403); exit('Invalid CSRF token'); }
+}
 
 // --- Main Execution ---
 // This script should only be called via POST.
@@ -22,7 +26,7 @@ $compose = $_POST['compose'] ?? null;
 $force   = filter_var($_POST['force'] ?? 'false', FILTER_VALIDATE_BOOLEAN);
 
 // Sanitize the name to be a valid directory name.
-$sanitizedName = $name ? preg_replace('/[^a-zA-Z0-9_-]/', '', $name) : null;
+$sanitizedName = $name ? strtolower(preg_replace('/[^a-z0-9._-]/i', '-', $name)) : null;
 
 // --- Validation and Installation ---
 if (empty($sanitizedName) || empty($compose) || !isValidYaml($compose)) {
@@ -39,7 +43,7 @@ try {
     } else {
         // The stack already exists, and force was false.
         http_response_code(409); // Conflict
-        echo "Stack '{$sanitizedName}' already exists. Installation aborted.";
+        echo "Stack '{$sanitizedName}' already exists. Installation aborted. (You can enable a 'force overwrite' option if needed).";
     }
 } catch (Exception $e) {
     // An error occurred during file operations.
