@@ -11,6 +11,10 @@ Menu="Utilities"
 
 define('PLUGIN_ROOT', '/plugins/composerize');
 define('PLUGIN_API_URL', PLUGIN_ROOT . '/api.php');
+session_start();
+if (empty($_SESSION['csrf'])) {
+  $_SESSION['csrf'] = bin2hex(random_bytes(16));
+}
 
 // Suppress errors and try to include
 $templates = [];
@@ -195,6 +199,7 @@ textarea {
     <div class="composerize-panel">
         <h3>Docker Compose Preview</h3>
         <form id="compose-form">
+            <input type="hidden" name="csrf" id="csrf" value="<?= htmlspecialchars($_SESSION['csrf']); ?>">
             <div style="margin-bottom: 15px; display: flex; gap: 10px;">
                 <button type="button" id="import-button" class="button-sm">Import YAML</button>
                 <button type="button" id="export-button" class="button-sm">Export YAML</button>
@@ -560,7 +565,7 @@ $(function() {
             $.ajax({
                 url: "<?= htmlspecialchars(PLUGIN_API_URL); ?>",
                 method: 'POST',
-                data: { name, compose, force: $forceInstall.is(':checked') ? 'true' : 'false' },
+                data: { name, compose, force: $forceInstall.is(':checked') ? 'true' : 'false', csrf: $('#csrf').val() },
                 timeout: 60000
             })
             .done(data => {
