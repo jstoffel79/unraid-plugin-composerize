@@ -23,7 +23,8 @@ function quoteValue(string $value): string
 
 /**
  * Manually parses a Docker template XML and builds a 'docker run' command.
- * This version avoids escapeshellarg() to be compatible with the composerize JS library.
+ * This version avoids escapeshellarg() and correctly separates flags from their values
+ * to be compatible with the composerize JS library.
  */
 function buildDockerRunCommand(SimpleXMLElement $xml): ?string
 {
@@ -32,7 +33,6 @@ function buildDockerRunCommand(SimpleXMLElement $xml): ?string
     }
 
     $command = ['docker run'];
-    // Replaced all escapeshellarg() calls with quoteValue()
     $command[] = '--name=' . quoteValue((string)$xml->Name);
 
     if (isset($xml->Network) && (string)$xml->Network !== 'bridge') {
@@ -62,7 +62,9 @@ function buildDockerRunCommand(SimpleXMLElement $xml): ?string
                     $hostPort = $value;
                     $containerPort = (string)$attributes['Target'];
                     if (!empty($hostPort) && !empty($containerPort)) {
-                        $command[] = '-p ' . quoteValue($hostPort . ':' . $containerPort);
+                        // FIX: Separate the flag from its value
+                        $command[] = '-p';
+                        $command[] = quoteValue($hostPort . ':' . $containerPort);
                     }
                     break;
 
@@ -70,14 +72,18 @@ function buildDockerRunCommand(SimpleXMLElement $xml): ?string
                     $hostPath = $value;
                     $containerPath = (string)$attributes['Target'];
                     if (!empty($hostPath) && !empty($containerPath)) {
-                        $command[] = '-v ' . quoteValue($hostPath . ':' . $containerPath);
+                        // FIX: Separate the flag from its value
+                        $command[] = '-v';
+                        $command[] = quoteValue($hostPath . ':' . $containerPath);
                     }
                     break;
                 
                 case 'Variable':
                     $name = (string)$attributes['Target'];
                     if (isset($name) && $value !== '') {
-                        $command[] = '-e ' . quoteValue($name . '=' . $value);
+                        // FIX: Separate the flag from its value
+                        $command[] = '-e';
+                        $command[] = quoteValue($name . '=' . $value);
                     }
                     break;
             }
