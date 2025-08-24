@@ -35,14 +35,17 @@ function buildDockerRunCommand(SimpleXMLElement $xml): ?string
 
     $command = ['docker run'];
     
-    // FIX: Separate all flags from their values.
     $command[] = '--name';
     $command[] = quoteValue((string)$xml->Name);
 
+    // Per user request, commented out custom network handling to default all containers to the 'bridge' network.
+    // This prevents issues with the composerize library and external networks.
+    /*
     if (isset($xml->Network) && (string)$xml->Network !== 'bridge') {
         $command[] = '--net';
         $command[] = quoteValue((string)$xml->Network);
     }
+    */
 
     if (isset($xml->Privileged) && strtolower(trim((string)$xml->Privileged)) === 'true') {
         $command[] = '--privileged';
