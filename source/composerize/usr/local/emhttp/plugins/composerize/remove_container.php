@@ -1,139 +1,49 @@
 <?php
+declare(strict_types=1);
+
 /**
- * remove_container.php - Handles Docker container removal
+ * remove_container.php - Stops and forcefully removes a Docker container.
  */
 
-// Only allow POST requests
+session_start();
+
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
-    echo "Error: This script only accepts POST requests.";
-    exit;
+    exit('Method Not Allowed');
 }
 
-// Get container name from POST data
-$containerName = $_POST['container_name'] ?? null;
+// Basic CSRF protection
+if (!hash_equals($_SESSION['csrf'] ?? '', $_POST['csrf'] ?? '')) { 
+    http_response_code(403); 
+    exit('Invalid CSRF token'); 
+}
+
+$containerName = $_POST['container_name'] ?? '';
 
 if (empty($containerName)) {
     http_response_code(400);
-    echo "Error: Container name is required.";
-    exit;
+    exit('Container name not specified.');
 }
 
-// Sanitize container name
-$containerName = preg_replace('/[^a-zA-Z0-9_-]/', '', $containerName);
+// Sanitize the name to prevent command injection
+$sanitizedName = escapeshellarg($containerName);
+$timeout = 10; // 10-second timeout for graceful stop
 
-if (empty($containerName)) {
-    http_response_code(400);
-    echo "Error: Invalid container name.";
-    exit;
-}
+error_log("Composerize Trace: Attempting to stop container '{$containerName}' with timeout {$timeout}s.");
+// Stop the container with a timeout
+exec("/usr/bin/docker stop -t {$timeout} {$sanitizedName} 2>&1", $stopOutput, $stopCode);
 
-/**
- * Safely execute Docker commands
- */
-function executeDockerCommand(string $command): array
-{
-    $output = [];
-    $returnCode = 0;
-    
-    // Execute command and capture output
-    exec($command . ' 2>&1', $output, $returnCode);
-    
-    return [
-        'success' => $returnCode === 0,
-        'output' => implode("\n", $output),
-        'return_code' => $returnCode
-    ];
-}
+// Regardless of stop success, attempt to remove it forcefully
+error_log("Composerize Trace: Attempting to forcefully remove container '{$containerName}'.");
+exec("/usr/bin/docker rm -f {$sanitizedName} 2>&1", $removeOutput, $removeCode);
 
-/**
- * Check if container exists and is running
- */
-function getContainerStatus(string $containerName): array
-{
-    $result = executeDockerCommand("docker inspect --format='{{.State.Status}}' " . escapeshellarg($containerName));
-    
-    if (!$result['success']) {
-        return ['exists' => false, 'running' => false, 'status' => 'not_found'];
-    }
-    
-    $status = trim($result['output']);
-    return [
-        'exists' => true,
-        'running' => $status === 'running',
-        'status' => $status
-    ];
-}
-
-/**
- * Stop and remove a Docker container
- */
-function removeContainer(string $containerName): array
-{
-    $status = getContainerStatus($containerName);
-    
-    if (!$status['exists']) {
-        return ['success' => false, 'message' => "Container '{$containerName}' does not exist."];
-    }
-    
-    $steps = [];
-    
-    // Stop container if running
-    if ($status['running']) {
-        $steps[] = "Stopping container '{$containerName}'...";
-        $result = executeDockerCommand("docker stop " . escapeshellarg($containerName));
-        
-        if (!$result['success']) {
-            return [
-                'success' => false, 
-                'message' => "Failed to stop container '{$containerName}': " . $result['output'],
-                'steps' => $steps
-            ];
-        }
-        $steps[] = "Container stopped successfully.";
-    } else {
-        $steps[] = "Container '{$containerName}' is already stopped.";
-    }
-    
-    // Remove container
-    $steps[] = "Removing container '{$containerName}'...";
-    $result = executeDockerCommand("docker rm " . escapeshellarg($containerName));
-    
-    if (!$result['success']) {
-        return [
-            'success' => false,
-            'message' => "Failed to remove container '{$containerName}': " . $result['output'],
-            'steps' => $steps
-        ];
-    }
-    
-    $steps[] = "Container removed successfully.";
-    
-    return [
-        'success' => true,
-        'message' => "Container '{$containerName}' has been stopped and removed successfully.",
-        'steps' => $steps
-    ];
-}
-
-try {
-    error_log("Composerize: Attempting to remove container '{$containerName}'");
-    
-    $result = removeContainer($containerName);
-    
-    if ($result['success']) {
-        http_response_code(200);
-        echo $result['message'];
-        error_log("Composerize: Successfully removed container '{$containerName}'");
-    } else {
-        http_response_code(400);
-        echo $result['message'];
-        error_log("Composerize: Failed to remove container '{$containerName}': " . $result['message']);
-    }
-    
-} catch (Exception $e) {
+if ($removeCode === 0) {
+    echo "Successfully removed container '{$containerName}'.";
+} else {
     http_response_code(500);
-    $errorMsg = "An error occurred while removing container: " . htmlspecialchars($e->getMessage());
-    echo $errorMsg;
-    error_log("Composerize: Exception while removing container '{$containerName}': " . $e->getMessage());
+    // Combine output for a more informative error message
+    $fullOutput = array_merge($stopOutput, $removeOutput);
+    $errorMessage = implode("\n", $fullOutput);
+    error_log("Composerize Trace: Failed to remove container '{$containerName}'. Output: {$errorMessage}");
+    exit("Failed to remove container '{$containerName}'.\n" . htmlspecialchars($errorMessage));
 }
