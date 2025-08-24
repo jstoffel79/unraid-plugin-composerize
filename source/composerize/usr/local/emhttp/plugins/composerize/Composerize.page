@@ -11,7 +11,8 @@ Menu="Utilities"
 
 define('PLUGIN_ROOT', '/plugins/composerize');
 define('PLUGIN_API_URL', PLUGIN_ROOT . '/api.php');
-require_once __DIR__ . '/include/composerize.php';
+// Corrected the path to use a full, absolute path for maximum reliability.
+require_once '/usr/local/emhttp/plugins/composerize/include/composerize.php';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -206,43 +207,4 @@ document.addEventListener('DOMContentLoaded', () => {
     form.addEventListener('submit', handleApply);
 
     templateSelect.addEventListener('change', () => {
-        const selectedOption = templateSelect.options[templateSelect.selectedIndex];
-        const command = selectedOption.value;
-        
-        // Update the command output box every time the selection changes
-        commandOutput.textContent = command || 'Select a template to view the generated command.';
-
-        if (command) {
-            try {
-                originalCompose = composerize(command);
-                composeText.value = originalCompose;
-                stackNameInput.value = selectedOption.text;
-                submitButton.disabled = false;
-                undoButton.disabled = false;
-            } catch (e) {
-                const errorMessage = "The composerize library failed to parse the Docker command. Please check for unusual characters or formatting in the template.";
-                showStatus(`Error generating compose: ${errorMessage}`, 'error');
-                originalCompose = '';
-                composeText.value = `Could not parse the docker run command.\n\nError: ${errorMessage}\n\nCommand: ${command}`;
-                submitButton.disabled = true;
-                undoButton.disabled = true;
-            }
-        } else {
-            originalCompose = '';
-            composeText.value = '';
-            stackNameInput.value = '';
-            submitButton.disabled = true;
-            undoButton.disabled = true;
-        }
-    });
-
-    undoButton.addEventListener('click', () => { composeText.value = originalCompose; });
-
-    resetButton.addEventListener('click', () => {
-        templateSelect.selectedIndex = 0;
-        templateSelect.dispatchEvent(new Event('change'));
-    });
-});
-</script>
-</body>
-</html>
+        const selectedOption = templateSelect.options[templateSelect.selectedIn
